@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "226238111719",
+    "firebase_url": "https://primapay-2314a.firebaseio.com",
+    "project_id": "primapay-2314a",
+    "storage_bucket": "primapay-2314a.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:226238111719:android:c34a07a70670ca15",
+        "android_client_info": {
+          "package_name": "com.lateph.primapay"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "226238111719-ck0jugvolhd7lff927ajkhvdcvo188j8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBOEHFfkU9Iu8BD1--Z4BZfGa1bL9BSCyM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "226238111719-ck0jugvolhd7lff927ajkhvdcvo188j8.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

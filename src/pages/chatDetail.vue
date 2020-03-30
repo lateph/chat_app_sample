@@ -1,44 +1,126 @@
 <template>
-  <q-layout view="lHh Lpr lFf">
-    <q-header elevated>
+  <q-layout>
+    <q-header>
       <q-toolbar>
         <q-btn flat dense icon="arrow_back_ios" @click="$router.go(-1)" />
 
-        <q-toolbar-title>
-          {{ $store.getters['chat/currentUser'].name }}
-        </q-toolbar-title>
+        <div class="row items-center justify-between full-width">
+          <div class="row items-center ">
+            <div class="q-mr-sm">
+              <q-avatar color="white" text-color="primary">
+                {{  $store.getters['chat/currentUser'] &&  $store.getters['chat/currentUser'].name ? $store.getters['chat/currentUser'].name.substring(0,1).toUpperCase() : '' }}
+              </q-avatar>
+            </div>
+            <div>
+              <div class="text-weight-medium">
+                {{ $store.getters['chat/currentUser'].name }}
+              </div>
+              <div style="font-size:11px; margin-top: -3px;" v-if="$store.state.chat.onlineUser &&  $store.state.chat.onlineUser.status">
+                {{ $store.state.chat.custom && $store.state.chat.custom.text == 'typing' ? 'typing ...' : 'Online' }}
+              </div>
+              <div style="font-size:11px; margin-top: -3px;" v-if="$store.state.chat.onlineUser &&  !$store.state.chat.onlineUser.status">
+                last seen {{ $store.state.chat.onlineUser.lastOnline  | moment("from", "now") }}
+              </div>
+            </div>
+          </div>
+          <div>
+            <q-btn flat dense icon="more_vert" @click="$router.go(-1)" />
+          </div>
+        </div>
 
       </q-toolbar>
     </q-header>
 
     <q-page-container>
-      <q-page >
-        <q-scroll-area ref="scrollArea" style="height: calc(100vh - 100px);" class="full-width">
-          <q-chat-message
+      <q-page  class="flex q-pa-sm">
+         <q-scroll-area
+          ref="scrollArea"
+          class="full-width q-px-sm"
+          content-style="height: 100%;"
+        >
+          <!-- <q-chat-message
             class="q-pl-md q-pr-md"
-            v-for="message in messages"
-            :key="message._id"
-            :name="message.from == $store.state.chat.user._id ? 'me' : message.fromContact.name"
-            :text="[message.text]"
+            v-for="message in $store.getters['chat/messages']"
+            :key="message.rowid"
+            :name="message.fromid == $store.state.chat.user._id ? 'me' : message.fromContact.name"
+            :text="[message.message]"
             stamp="7 minutes ago"
-            :sent="message.from != $store.state.chat.user._id"
-            :bg-color="message.from != $store.state.chat.user._id ? 'amber-7' : 'light-green'"
-          />
+            :sent="message.fromid != $store.state.chat.user._id"
+            :bg-color="message.fromid != $store.state.chat.user._id ? 'amber-7' : 'light-green'"
+          /> -->
+          <div
+            class="row q-mb-xs q-gutter-y-xs"
+            v-for="message in $store.getters['chat/messages']"
+            :key="message.rowid"
+          >
+            <!-- me -->
+            <div
+              class="row justify-end full-width q-py-xs"
+              v-if="message.fromid == $store.state.chat.user._id"
+            >
+              <div
+                class="bg-green-2 q-pa-xs row"
+                style="max-width:70%; min-width:50px; border-radius:6px;"
+              >
+                <!-- prettier-ignore -->
+                <div class="chatBubble">{{ message.message}}<span class="text-blue-2" style="margin-left:50px;">|</span></div>
+
+                <div
+                  class="row justify-end full-width"
+                  style="font-size: 10px; margin-top:-15px"
+                >
+                  <div class="row justify-center">
+                    <div class="row items-center">
+                      <div class="q-mr-xs">{{ message.createdAt  | moment("from", "now") }}</div>
+                      <q-icon name="done" style="font-size: 18px;" v-if="message.status == 1"/>
+                      <q-icon name="done_all" style="font-size: 18px;" v-if="message.status == 2"/>
+                      <q-icon name="done_all" style="font-size: 18px;" v-if="message.status == 3" color="blue" />
+                      <!-- <q-icon
+                        name="done"
+                        style="font-size: 10px; margin-left:-5px;"
+                      /> -->
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- him -->
+            <div
+              class="row justify-start full-width q-py-xs"
+              v-if="message.fromid != $store.state.chat.user._id"
+            >
+              <div
+                class="bg-grey-3 q-pa-xs row"
+                style="max-width:70%; min-width:50px; border-radius:6px;"
+              >
+                <!-- prettier-ignore -->
+                <div class="chatBubble">{{ message.message}}<span class="text-grey-3" style="margin-left:35px;">|</span></div>
+
+                <div
+                  class="row justify-end full-width"
+                  style="font-size: 10px; margin-top:-15px"
+                >
+                  <div>7:00pm</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div ref="last" style="height: 1px;"></div>
         </q-scroll-area>
       </q-page>
     </q-page-container>
 
     <q-footer class="row no-wrap q-py-xs justify-space q-px-xs">
-      <!-- <div class="row content-end q-pb-xs">
+      <div class="row content-end q-pb-xs">
         <q-btn flat dense icon="add" @click="showBottomSheet(true)" />
-      </div> -->
+      </div>
       <div style="flex-grow:1;">
         <q-input
           ref="inputField"
           rounded
           borderless
           autogrow
-          autofocus
           dense
           type="textarea"
           v-model.trim="message"
@@ -46,31 +128,29 @@
           input-style="border-radius: 16px; max-height:100px; "
           placeholder="Type a message"
           @input="
-            postCustoms('typing...');
+            postCustoms('typing');
             message.length > 0 ? (showSendBut = false) : (showSendBut = true);
           "
           @blur="
-            postCustoms('online');
+            postCustoms('untyping');
             showSendBut = true;
           "
           @keydown.shift.enter="shiftPlusEnter($event)"
           @keydown.enter="Enter($event)"
         />
       </div>
-      <!-- <div class="row content-end q-pa-xs" v-if="showSendBut">
+      <div class="row content-end q-pa-xs" v-if="showSendBut">
         <q-btn flat dense icon="camera_alt" />
         <q-btn flat dense icon="mic" />
-      </div> -->
-      <div class="row">
-        <q-btn flat dense icon="play_circle_filled" @click="postMsg()" style="font-size: 1.26em"/>
       </div>
-      <!-- <div
+      <div
         class="row content-end justify-center content-center"
         style="position: relative; width: 50px;"
+        v-if="!showSendBut"
       >
         <q-icon name="play_circle_filled" style="font-size: 38px;" />
-        <div class="transparentSend" v-on:click="postMsg()"></div>
-      </div> -->
+        <div class="transparentSend" @mousedown.prevent.stop="postMsg()"></div>
+      </div>
     </q-footer>
   </q-layout>
 </template>
@@ -81,22 +161,6 @@
 import { mapState } from 'vuex'
 export default {
   // name: 'PageName',
-  sockets: {
-    connect () {
-      alert('connect')
-      // Fired when the socket connects.
-      // this.isConnected = true;
-    },
-
-    disconnect () {
-      alert('disconek')
-      // this.isConnected = false;
-    }
-    // Fired when the server sends something on the "messageChannel" channel.
-    // 'messages created' (data) {
-    //   alert('taek 1')
-    // }
-  },
   computed: mapState('chat', ['messages']),
   watch: {
     // messages (newValue, oldValue) {
@@ -112,26 +176,27 @@ export default {
     return {
       message: null,
       showSendBut: true,
-      unwatch: null
+      unwatch: null,
+      typing: false
     }
   },
   beforeRouteLeave (to, from, next) {
     this.unwatch()
+    this.$store.dispatch('chat/removeCurrent')
     next()
   },
   mounted () {
     console.log(this.$router)
-    this.$store.commit('chat/setCurrent', this.$router.currentRoute.params.id)
-    this.$store.dispatch('chat/current', this.$router.currentRoute.params.id).then(() => {
+    this.$store.dispatch('chat/setCurrent', this.$router.currentRoute.params.id).then(() => {
       this.$nextTick(() => {
         setTimeout(() => {
-          this.animateScroll(0)
+          this.animateScroll(10)
         }, 100)
       })
-      // this.animateScroll(0)
     })
+
     this.unwatch = this.$store.watch(
-      (state, getters) => state.chat.messages,
+      (state, getters) => state.chat.dataMessage,
       (newValue, oldValue) => {
         console.log(`Updating from ${oldValue.length} to ${newValue.length}`)
 
@@ -150,6 +215,24 @@ export default {
     console.log(this.$socket)
   },
   methods: {
+    shiftPlusEnter (e) {
+      if (this.$q.platform.is.desktop) {
+        e.preventDefault()
+        this.message += '\n'
+        console.log(this.message)
+      }
+    },
+    Enter (e) {
+      console.log('this.$q.platform.is.desktop', this.$q.platform.is.desktop)
+      if (this.$q.platform.is.desktop) {
+        e.preventDefault()
+        if (!e.shiftKey) {
+          if (this.message) {
+            this.postMsg()
+          }
+        }
+      }
+    },
     animateScroll (time = 300) {
       // console.log('jancok', this.$refs)
       // const offset = this.$refs.scrollArea.offsetTop
@@ -168,16 +251,65 @@ export default {
       this.$store.dispatch('chat/sendChat', {
         text: this.message
       })
-      // this.animateScroll()
 
       this.message = null
-      // this.animateScroll()
-
-      // console.log(this.$refs)
     },
-    postCustoms () {
+    async postCustoms (evt) {
+      const obj = {
+        to: [this.$router.currentRoute.params.id],
+        from: {
+          name: this.$store.state.chat.user.name,
+          _id: this.$store.state.chat.user._id
+        },
+        group: false,
+        text: evt,
+        date: Date.now()
+      }
 
+      switch (evt) {
+        case 'typing':
+          if (!this.typing) {
+            await this.$appFeathers
+              .service('customs')
+              .create(obj)
+
+            this.typing = true
+          }
+          break
+        default:
+          // else
+          await this.$appFeathers.service('customs').create(obj)
+
+          this.typing = false
+      }
     }
   }
 }
 </script>
+
+<style scoped>
+.q-bottom-sheet--grid .q-icon,
+.q-bottom-sheet--grid img,
+.q-bottom-sheet--grid .q-bottom-sheet__empty-icon {
+  margin-bottom: 0 !important;
+}
+
+.transparentSend {
+  z-index: 10;
+  display: block;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.chatBubble {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  hyphens: auto;
+  max-width: 100%;
+}
+</style>

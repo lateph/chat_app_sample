@@ -6,7 +6,21 @@
         <q-toolbar-title>
           Quasar App
         </q-toolbar-title>
-        <!-- <q-btn flat round dense icon="add" @click="prompt = true" /> -->
+
+        <div>
+          <q-btn flat dense icon="more_vert">
+            <q-menu>
+              <q-list style="min-width: 100px">
+                <q-item clickable v-close-popup @click="logout()">
+                  <q-item-section>Logout</q-item-section>
+                </q-item>
+                <q-item clickable v-close-popup>
+                  <q-item-section>self="top left"</q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
+          </q-btn>
+        </div>
       </q-toolbar>
     </q-header>
 
@@ -89,19 +103,15 @@ export default {
       }
     }
   },
-  sockets: {
-    connect: function () {
-      console.log(this)
-      console.log('socket connected')
-    },
-    customEmit: function (data) {
-      console.log('this method was fired by the socket server. eg: io.emit("customEmit", data)')
-    }
-  },
   mounted () {
     this.$store.commit('chat/clearMessage')
   },
   methods: {
+    logout () {
+      this.$store.dispatch('chat/doLogout').then(() => {
+        this.$router.replace('/')
+      })
+    }
   }
 }
 </script>

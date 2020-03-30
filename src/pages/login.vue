@@ -11,7 +11,7 @@
     </q-header>
     <q-page-container>
       <q-page>
-        <div class="row full-width">
+        <div class="row">
           <q-card square class="full-width no-shadow">
             <q-card-section class="bg-primary">
               <h4 class="text-h5 text-white q-my-md">Company &amp; Co</h4>
@@ -47,7 +47,6 @@
 </template>
 
 <script>
-import { LocalStorage } from 'quasar'
 export default {
   // name: 'PageName',
   data: function () {
@@ -65,8 +64,7 @@ export default {
         password: this.password
       }).then(data => {
         console.log(data)
-        LocalStorage.set('jwt', data.accessToken)
-        this.$router.push('/feeds')
+        this.$router.replace('/feeds')
       }).catch(err => {
         console.log(err)
         this.$q.notify(err.message)

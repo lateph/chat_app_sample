@@ -4,6 +4,9 @@ export default function () {
     contacts: [],
     user: null,
     currentUserId: '',
-    messages: []
+    limit: 0,
+    dataMessage: [],
+    onlineUser: null,
+    custom: null
   }
 }
