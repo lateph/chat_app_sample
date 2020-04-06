@@ -15,6 +15,10 @@ export function messages (state, data) {
   })
 }
 
+export function setConv (state, data) {
+  state.convs = data
+}
+
 export function insertMessages (state, data) {
   state.dataMessage = [..._.map(data, (e) => {
     return convert(state, e)
@@ -59,4 +63,23 @@ export function setCurrentOnlineUser (state, data) {
 
 export function setCustoms (state, data) {
   state.custom = data
+}
+
+export function logout (state, data) {
+  state.contacts = []
+  state.user = null
+  state.currentUserId = ''
+  state.limit = 0
+  state.dataMessage = []
+  state.onlineUser = null
+  state.custom = null
+  state.convs = []
+}
+
+export function resume (state) {
+  state.appRunning = true
+}
+
+export function pause (state) {
+  state.appRunning = false
 }

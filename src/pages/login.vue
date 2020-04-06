@@ -2,7 +2,6 @@
   <q-layout view="lHh Lpr lFf">
     <q-header elevated>
       <q-toolbar>
-
         <q-toolbar-title>
           Quasar App
         </q-toolbar-title>
@@ -66,8 +65,12 @@ export default {
         console.log(data)
         this.$router.replace('/feeds')
       }).catch(err => {
-        console.log(err)
-        this.$q.notify(err.message)
+        console.log('err login ', err)
+        if (err && err.message) {
+          this.$q.notify(err.message)
+        } else {
+          this.$q.notify('login fail')
+        }
       })
     }
   }

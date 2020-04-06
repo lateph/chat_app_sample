@@ -1,12 +1,18 @@
+import 'flag-icon-css/css/flag-icon.css'
 // import something here
 const feathers = require('@feathersjs/feathers')
 const socketio = require('@feathersjs/socketio-client')
 const io = require('socket.io-client')
+import axios from 'axios'
+const chatInstance = axios.create({
+  baseURL: 'http://192.168.1.102:3030'
+})
 // const VueSocketIO = require('vue-socket.io')
 // import createSocketIoPlugin from 'vuex-socketio';
 
+const socket = io('http://192.168.1.102:3030')
 // const socket = io('http://localhost:3030')
-const socket = io('http://159.89.205.235:3030')
+// const socket = io('http://159.89.205.235:3030')
 // const socketPlugin = createSocketIoPlugin(socket);
 
 // const socket = io('http://159.89.205.235:3030')
@@ -16,12 +22,12 @@ const app = feathers()
 // Set up Socket.io client with the socket
 app.configure(socketio(socket))
 // "async" is optional
-let firstCheck = true
-const _deviceready = (Vue, store, router) => {
-  const jwt = LocalStorage.getItem('jwt')
+const jwt = LocalStorage.getItem('jwt')
 
+const _deviceready = (Vue, store, router) => {
   Vue.prototype.$socket = socket
   Vue.prototype.$appFeathers = app
+  Vue.prototype.$chatAxios = chatInstance
 
   console.log(store)
   socket.on('connect', () => {
@@ -30,40 +36,17 @@ const _deviceready = (Vue, store, router) => {
       store.dispatch('chat/doLoginJwt', {
         jwt
       }).then(data => {
-        console.log('okebanget')
-        if (firstCheck) {
-          router.replace('/feeds')
-          if (window.navigator.splashscreen) {
-            navigator.splashscreen.hide()
-          }
-        }
-        firstCheck = false
-      }).catch(err => {
-        if (err) {
-          console.log(err)
-        }
-        if (firstCheck) {
-          router.replace('/')
-          if (window.navigator.splashscreen) {
-            navigator.splashscreen.hide()
-          }
-        }
-        firstCheck = false
+        console.log('okebanget', data)
       })
-    } else {
-      if (firstCheck) {
-        router.replace('/')
-        if (window.navigator.hide) {
-          navigator.splashscreen.hide()
-        }
-      }
-      firstCheck = false
     }
   })
 
   app.service('messages')
     .on('created', message => {
-      store.dispatch('chat/addMessage', message)
+      store.dispatch('chat/addMessage', {
+        ...message,
+        _source: 'socket'
+      })
     })
   app.service('onlineuser')
     .on('patched', message => {
@@ -104,9 +87,36 @@ export default async ({ router, store, Vue }) => {
     document.addEventListener('deviceready', () => {
       _deviceready(Vue, store, router)
     }, false)
+    document.addEventListener('pause', () => {
+      console.log('pause')
+      store.commit('chat/pause')
+    }, false)
+    document.addEventListener('resume', () => {
+      console.log('resume')
+      store.commit('chat/resume')
+    }, false)
   } else {
     _deviceready(Vue, store, router)
   }
+
+  setTimeout(() => {
+    if (jwt) {
+      store.dispatch('chat/localDataLoad', {
+        jwt
+      }).then(data => {
+        console.log('okebanget', data)
+      })
+      router.replace('/feeds')
+      if (window.navigator.splashscreen) {
+        navigator.splashscreen.hide()
+      }
+    } else {
+      router.replace('/')
+      if (window.navigator.splashscreen) {
+        navigator.splashscreen.hide()
+      }
+    }
+  }, 500)
 
   // Vue.use(new VueSocketIO({
   //   store,

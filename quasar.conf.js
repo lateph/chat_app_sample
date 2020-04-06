@@ -53,7 +53,10 @@ module.exports = function (ctx) {
         'QItem',
         'QItemSection',
         'QItemLabel',
-        'LocalStorage'
+        'LocalStorage',
+        'QSelect',
+        'QBadge',
+        'BottomSheet'
       ]
     },
 
@@ -74,6 +77,14 @@ module.exports = function (ctx) {
       // extractCSS: false,
 
       // https://quasar.dev/quasar-cli/cli-documentation/handling-webpack
+      chainWebpack (chain, { isServer, isClient }) {
+        chain.module.rule('images')
+          .use('url-loader')
+          .tap((options) => {
+            options.name = 'img/[path][name].[ext]'
+            return options
+          })
+      },
       extendWebpack (cfg) {
         cfg.module.rules.push({
           enforce: 'pre',

@@ -14,8 +14,8 @@
                 <q-item clickable v-close-popup @click="logout()">
                   <q-item-section>Logout</q-item-section>
                 </q-item>
-                <q-item clickable v-close-popup>
-                  <q-item-section>self="top left"</q-item-section>
+                <q-item clickable v-close-popup @click="syncMain()">
+                  <q-item-section>Sync Contact</q-item-section>
                 </q-item>
               </q-list>
             </q-menu>
@@ -25,25 +25,43 @@
     </q-header>
 
     <q-page-container>
-      <q-page padding>
+      <q-page padding v-if="contacts.length > 0 && convs.length > 0">
         <q-list bordered>
-          <q-item v-for="contact in contacts" :key="contact.id" class="q-my-sm" clickable v-ripple  @click="$router.push('/detail/'+contact._id)">
+          <q-item v-for="conv in convs" :key="conv.rowid" class="q-my-sm" clickable v-ripple  @click="$router.push('/detail/'+conv.convid)">
             <q-item-section avatar>
               <q-avatar color="primary" text-color="white">
-                 {{ contact.email.substring(0,1).toUpperCase() }}
+                 {{ conv.name.substring(0,1).toUpperCase() }}
               </q-avatar>
             </q-item-section>
 
             <q-item-section>
-              <q-item-label>{{ contact.name }}</q-item-label>
-              <q-item-label caption lines="1">{{ contact.email }}</q-item-label>
+              <q-item-label>{{ conv.name }}</q-item-label>
+              <q-item-label caption lines="1">{{ conv.message }}</q-item-label>
             </q-item-section>
 
-            <q-item-section side>
-              <q-icon name="chat_bubble" color="green" />
+            <q-item-section side v-if="conv.unreadCount > 0">
+              <q-badge color="green">
+                {{conv.unreadCount}}
+              </q-badge>
             </q-item-section>
           </q-item>
         </q-list>
+
+        <q-page-sticky position="bottom-right" :offset="[18, 18]">
+          <q-btn fab icon="question_answer" color="accent"  @click="startMessage"/>
+        </q-page-sticky>
+      </q-page>
+      <q-page padding v-if="contacts.length > 0 && convs.length == 0" class="flex flex-center">
+        <q-btn unelevated rounded color="primary" label="Start Message"  icon="question_answer" v-if="!loading" @click="startMessage"/>
+      </q-page>
+      <q-page padding v-if="contacts.length == 0" class="flex flex-center">
+        <q-btn unelevated rounded color="primary" label="Sync Contact"  icon="autorenew" v-if="!loading" @click="syncMain"/>
+        <q-circular-progress v-if="loading"
+          indeterminate
+          size="50px"
+          color="primary"
+          class="q-ma-md"
+        />
       </q-page>
     </q-page-container>
 
@@ -66,7 +84,7 @@
 
               <q-item-section>
                 <q-item-label></q-item-label>
-                <q-item-label caption lines="1">{{ contact.email }}</q-item-label>
+                <q-item-label caption lines="1">{{ contact.name }}</q-item-label>
               </q-item-section>
 
               <q-item-section side>
@@ -91,9 +109,9 @@ export default {
   // name: 'PageName',
   data: function () {
     return {
-      convs: [],
       prompt: false,
-      address: ''
+      address: '',
+      loading: false
     }
   },
   computed: {
@@ -101,12 +119,32 @@ export default {
       get () {
         return this.$store.state.chat.contacts
       }
+    },
+    convs: {
+      get () {
+        return this.$store.state.chat.convs
+      }
     }
   },
   mounted () {
     this.$store.commit('chat/clearMessage')
   },
   methods: {
+    async syncMain () {
+      this.loading = true
+      try {
+        await this.$store.dispatch('chat/syncContact')
+        console.log('sync contact done')
+        await this.$store.dispatch('chat/loadLocalContact')
+        this.loading = false
+      } catch (error) {
+        console.log(error)
+        this.loading = false
+      }
+    },
+    startMessage () {
+      this.prompt = true
+    },
     logout () {
       this.$store.dispatch('chat/doLogout').then(() => {
         this.$router.replace('/')

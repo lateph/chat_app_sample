@@ -72,6 +72,7 @@
                   <div class="row justify-center">
                     <div class="row items-center">
                       <div class="q-mr-xs">{{ message.createdAt  | moment("from", "now") }}</div>
+                      <q-icon name="schedule" style="font-size: 14px;" color="grey-14" v-if="message.status == 0"/>
                       <q-icon name="done" style="font-size: 18px;" v-if="message.status == 1"/>
                       <q-icon name="done_all" style="font-size: 18px;" v-if="message.status == 2"/>
                       <q-icon name="done_all" style="font-size: 18px;" v-if="message.status == 3" color="blue" />
@@ -140,7 +141,7 @@
         />
       </div>
       <div class="row content-end q-pa-xs" v-if="showSendBut">
-        <q-btn flat dense icon="camera_alt" />
+        <q-btn flat dense icon="camera_alt" @click="selectImage"/>
         <q-btn flat dense icon="mic" />
       </div>
       <div
@@ -215,6 +216,51 @@ export default {
     console.log(this.$socket)
   },
   methods: {
+    showBottomSheet (grid) {
+      this.$q
+        .bottomSheet({
+          grid,
+          dark: false,
+          actions: [
+            {
+              label: 'Gallery',
+              icon: 'photo',
+              id: 'photo',
+              color: 'red'
+            },
+            {
+              label: 'Camera',
+              icon: 'camera',
+              id: 'camera',
+              color: 'blue'
+            },
+            {
+              label: 'Documents',
+              icon: 'description',
+              id: 'description',
+              color: 'green'
+            },
+            {
+              label: 'Contact',
+              icon: 'account_circle',
+              id: 'account_circle',
+              color: 'orange'
+            }
+          ]
+        })
+        .onOk(action => {
+          this.selectImage()
+        })
+    },
+    async selectImage () {
+      try {
+        await this.$store.dispatch('chat/doSendMedia', {
+          type: 'image/jpg'
+        })
+      } catch (error) {
+        console.log(error)
+      }
+    },
     shiftPlusEnter (e) {
       if (this.$q.platform.is.desktop) {
         e.preventDefault()
@@ -244,13 +290,15 @@ export default {
       this.$refs.scrollArea.setScrollPosition(this.$refs.scrollArea.scrollSize, time)
       // setScrollPosition(target, offset, duration)
     },
-    postMsg () {
+    async postMsg () {
       // clear the textarea
       // console.log(this.$store)
       // save in store to be shown in message
-      this.$store.dispatch('chat/sendChat', {
+      await this.$store.dispatch('chat/saveChat', {
         text: this.message
       })
+
+      this.$store.dispatch('chat/sendPendingChat')
 
       this.message = null
     },

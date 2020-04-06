@@ -7,6 +7,8 @@ export default function () {
     limit: 0,
     dataMessage: [],
     onlineUser: null,
-    custom: null
+    custom: null,
+    convs: [],
+    appRunning: true
   }
 }

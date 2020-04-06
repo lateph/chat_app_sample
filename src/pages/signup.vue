@@ -26,6 +26,34 @@
                       <q-icon name="people" />
                     </template>
                   </q-input>
+                  <q-select
+                    v-model="country"
+                    :options="options"
+                    label="Standard"
+                  >
+                    <template v-slot:prepend>
+                      <q-icon name="flag" />
+                    </template>
+                    <template v-slot:option="scope">
+                      <q-item
+                        v-bind="scope.itemProps"
+                        v-on="scope.itemEvents"
+                      >
+                        <q-item-section avatar>
+                          <span :class="'flag-icon '+scope.opt.icon"></span>
+                        </q-item-section>
+                        <q-item-section>
+                          <q-item-label v-html="scope.opt.label" />
+                        </q-item-section>
+                        <q-item-section side>{{scope.opt.code}}</q-item-section>
+                      </q-item>
+                    </template>
+                  </q-select>
+                  <q-input square clearable v-model="phone" type="number" :prefix="cCode">
+                    <template v-slot:prepend>
+                      <q-icon name="call" />
+                    </template>
+                  </q-input>
                   <q-input square clearable v-model="email" type="email" label="Email">
                     <template v-slot:prepend>
                       <q-icon name="email" />
@@ -52,13 +80,44 @@
 </template>
 
 <script>
+const otps = [
+  {
+    label: 'Indonesia',
+    value: 'id',
+    description: '',
+    icon: 'flag-icon-id',
+    code: '+62'
+  },
+  {
+    label: 'Singapure',
+    value: 'sg',
+    description: '',
+    icon: 'flag-icon-sg',
+    code: '+65'
+  },
+  {
+    label: 'USA',
+    value: 'us',
+    description: '',
+    icon: 'flag-icon-us',
+    code: '+1'
+  }
+]
 export default {
   // name: 'PageName',
   data: function () {
     return {
       email: '',
       name: '',
-      password: ''
+      password: '',
+      phone: '',
+      country: otps[0],
+      options: otps
+    }
+  },
+  computed: {
+    cCode () {
+      return this.country.code
     }
   },
   methods: {
@@ -67,7 +126,9 @@ export default {
       this.$store.dispatch('chat/doSignup', {
         email: this.email,
         password: this.password,
-        name: this.name
+        name: this.name,
+        phone: this.country.code + this.phone,
+        country: this.country.value
       }).then(data => {
         console.log(data)
         this.$router.go(-1)
