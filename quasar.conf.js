@@ -56,7 +56,9 @@ module.exports = function (ctx) {
         'LocalStorage',
         'QSelect',
         'QBadge',
-        'BottomSheet'
+        'QImg',
+        'BottomSheet',
+        'QInfiniteScroll'
       ]
     },
 

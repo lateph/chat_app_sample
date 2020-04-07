@@ -25,9 +25,17 @@ export function insertMessages (state, data) {
   }), ...state.dataMessage]
 }
 
+// recipientStatus should be not update also
 export function updateMessage (state, data) {
   var index = _.findIndex(state.dataMessage, { _id: data._id })
-  state.dataMessage.splice(index, 1, data)
+  if (index > -1) {
+    const _data = {
+      ...state.dataMessage[index],
+      ...data,
+      status: state.dataMessage[index].status > data.status ? state.dataMessage[index].status : data.status
+    }
+    state.dataMessage.splice(index, 1, _data)
+  }
 }
 
 export function addMessage (state, data) {

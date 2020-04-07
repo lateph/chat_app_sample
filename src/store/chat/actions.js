@@ -4,7 +4,7 @@ export function someAction (context) {
 */
 var _ = require('lodash')
 var db = null
-import { uid, LocalStorage } from 'quasar'
+import { LocalStorage } from 'quasar'
 import { jwtDecode } from 'jwt-js-decode'
 
 // signup action
@@ -39,6 +39,7 @@ export async function doLogin ({ state, dispatch, commit }, { email, password, s
   } catch (error) {
   }
   await dispatch('loadConv')
+  dispatch('sendPendingChat')
   dispatch('syncChat')
 
   LocalStorage.set('jwt', message.accessToken)
@@ -72,6 +73,7 @@ export async function localDataLoad ({ state, dispatch, commit }, { jwt }) {
   } catch (error) {
   }
   await dispatch('loadConv')
+  dispatch('sendPendingChat')
   return true
 }
 
@@ -120,67 +122,47 @@ export function updateToken ({ state, commit }, userId) {
   })
 }
 
-export function loadLocalContact ({ state, commit }) {
-  console.log('load local contact')
-  return new Promise((resolve, reject) => {
-    db.transaction(function (tx) {
-      tx.executeSql('SELECT * FROM contact', [], (tx, rs) => {
-        let selects = rs.rows._array
-        if (!selects) {
-          selects = rs.rows
-        }
-        console.log('contact', selects.length)
-        if (selects.length > 0) {
-          commit('contacts', selects)
-          resolve(selects)
-        } else {
-          console.log('empty user')
-          reject('user g ketemu')
-        }
-      }, function (tx, error) {
-        console.log('total user e ', error)
-        reject(error)
-      })
-    })
-  })
-}
+export async function sendChat ({ state, dispatch }, { text, localFile, uid, to, mediaType, mediaId }) {
+  let _mediaId = ''
+  let thumb = ''
+  if (mediaType === 1 || mediaType === '1') {
+    const mediaDetail = JSON.parse(mediaId)
+    const ret = await dispatch('uploadFile', { img: mediaDetail.file, type: mediaDetail.type })
+    _mediaId = ret.data._id
 
-export function saveChat ({ state, commit }, { text, mediaId }) {
-  return new Promise((resolve, reject) => {
-    db.transaction(async (tx) => {
-      const _uid = uid()
-      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?,?,?,?,?)', [_uid, text, state.currentUserId, state.user._id, JSON.stringify([state.currentUserId]), new Date().toISOString(), new Date().toISOString(), 0, ''], (tx, result) => {
-        commit('addMessage', {
-          message: text,
-          rowid: result.insertId,
-          _id: _uid,
-          contact: state.currentUserId,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          fromid: state.user._id,
-          status: 0
+    thumb = await new Promise((resolve, reject) => {
+      let options = {}
+      options = {
+        uri: mediaDetail.file,
+        folderName: 'compress',
+        quality: 10,
+        width: 10,
+        height: 10,
+        base64: true,
+        fit: true
+      }
+      window.ImageResizer.resize(options,
+        function (image) {
+          console.log('file compress: ', image)
+          resolve(image)
+        }, function (e) {
+          console.log('error compress', e)
+          reject(e)
         })
-      })
-    }, (e) => {
-      reject(e)
-    }, () => {
-      resolve(true)
     })
-  })
-}
-
-export async function sendChat ({ state }, { text, mediaId, uid, to }) {
+    await this._vm.$appFeathers.service('media').patch(null, { to: to }, { query: { _id: _mediaId } })
+  }
   const retMessage = await this._vm.$appFeathers.service('messages').create({
     from: state.user._id,
     to: to,
     text: text,
-    mediaId: mediaId,
+    mediaId: _mediaId,
     uid: uid,
-    status: 1
+    status: 1,
+    mediaType,
+    thumb
   })
-  if (mediaId) {
-    this._vm.$appFeathers.service('media').patch(null, { to: to }, { query: { _id: mediaId } })
-  }
+
   return retMessage
 }
 
@@ -195,6 +177,8 @@ export async function sendPendingChat ({ dispatch }) {
         _.forEach(selects, (r) => {
           dispatch('sendChat', {
             text: r.message,
+            localFile: r.localFile,
+            mediaType: r.mediaType,
             mediaId: r.mediaId,
             uid: r._id,
             to: JSON.parse(r.toids)
@@ -205,7 +189,7 @@ export async function sendPendingChat ({ dispatch }) {
   }, (e) => {
     console.log('update conv gagal', e)
   }, () => {
-    console.log('update conv success')
+    // console.log('update conv success')
   })
 }
 
@@ -229,7 +213,6 @@ export async function setCurrent ({ state, commit, dispatch }, data) {
   this._vm.$appFeathers.service('onlineuser').patch(null, { $push: { subcriber: state.user._id } }, { query: { userId: state.currentUserId } })
   dispatch('setReadCurrentChat')
   dispatch('updateConvToZero', data)
-  return await dispatch('loadMessage')
 }
 
 export function removeCurrent ({ state, commit }) {
@@ -238,10 +221,10 @@ export function removeCurrent ({ state, commit }) {
   commit('removeCurrent')
 }
 
-export function loadMessage ({ state, commit, dispatch }, data) {
+export function loadMessage ({ state, commit, dispatch }, limit) {
   return new Promise((resolve, reject) => {
     db.transaction(function (tx) {
-      tx.executeSql('SELECT * FROM message WHERE convid=? ORDER BY createdAt DESC Limit ? OFFSET ?', [state.currentUserId, 8, state.dataMessage.length], (tx, rs) => {
+      tx.executeSql('SELECT * FROM message WHERE convid=? ORDER BY createdAt DESC Limit ? OFFSET ?', [state.currentUserId, limit, state.dataMessage.length], (tx, rs) => {
         let selects = rs.rows._array
         if (!selects) {
           selects = rs.rows
@@ -254,7 +237,7 @@ export function loadMessage ({ state, commit, dispatch }, data) {
           reject('user g ketemu')
         }
       }, function (tx, error) {
-        console.log('total user e ', error)
+        console.log('total user e ', error.message)
         reject(error)
       })
     })
@@ -266,7 +249,6 @@ export function loadConv ({ state, commit, dispatch }) {
     db.transaction(function (tx) {
       // tx.executeSql('SELECT * FROM message WHERE rowid in (SELECT MAX(rowid) from message GROUP BY convid)', [], (tx, rs) => {
       tx.executeSql('SELECT * FROM conv ORDER BY updatedAt DESC', [], (tx, rs) => {
-        console.log('cok ile', rs.rows)
         let selects = rs.rows._array
         if (!selects) {
           selects = rs.rows
@@ -392,15 +374,15 @@ export async function syncContact ({ state, commit, dispatch }) {
 export function openDB ({ state }) {
   console.log(window.sqlitePlugin)
   if (window.sqlitePlugin) {
-    db = window.sqlitePlugin.openDatabase({ name: 'chat04' + state.user._id + '.db', location: 'default' }, function (db) {}, function (error) { console.log('Open database ERROR: ' + JSON.stringify(error)) })
+    db = window.sqlitePlugin.openDatabase({ name: 'chat08' + state.user._id + '.db', location: 'default' }, function (db) {}, function (error) { console.log('Open database ERROR: ' + JSON.stringify(error)) })
     console.log('DB: SQLite')
   } else {
-    db = window.openDatabase('chat04' + state.user._id, '0.1', 'My list', 200000)
+    db = window.openDatabase('chat08' + state.user._id, '0.1', 'My list', 200000)
     console.log('DB: WebSQL')
   }
   this._vm.$db = db
   db.transaction((tx) => {
-    tx.executeSql('CREATE TABLE IF NOT EXISTS message (_id, message, convid, fromid, toids, createdAt, updatedAt ,status, recipientStatus)')
+    tx.executeSql('CREATE TABLE IF NOT EXISTS message (_id, message, convid, fromid, toids, createdAt, updatedAt ,status, recipientStatus, mediaId, mediaType, localFile, thumb)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS conv (message, convid, name, phone, unreadCount INTEGER DEFAULT 0, updatedAt)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS contact (_id, email, name, phone, country)')
     tx.executeSql('CREATE INDEX IF NOT EXISTS convididx ON message (convid)')
@@ -413,7 +395,7 @@ export function openDB ({ state }) {
   })
 }
 
-export async function findContactDetail (state, id) {
+export async function findContactDetail ({ state }, id) {
   let c = _.find(state.contacts, c => c._id === id)
   if (!c) {
     c = await this._vm.$appFeathers.service('users').get(id)
@@ -422,7 +404,7 @@ export async function findContactDetail (state, id) {
 }
 
 export async function addMessage ({ state, commit, dispatch }, data) {
-  console.log('saving message :', data)
+  // console.log('saving message :', data)
   // get lawan chat
   // @todo support group chat
   let id = ''
@@ -454,25 +436,31 @@ export async function addMessage ({ state, commit, dispatch }, data) {
   let rowId = ''
   if (dataExists) {
     // update message
-    const resultUpdate = await dispatch('updateMessageStatus', [data.status, recipientStatus, data.uid])
+    const resultUpdate = await dispatch('updateMessageStatus', {
+      status: data.status,
+      recipientStatus,
+      uid: data.uid
+    })
     rowId = dataExists.rowId
-    console.log('resultUpdate', resultUpdate)
+    console.log('update status by addMessage ' + data.uid, resultUpdate)
   } else {
-    const resultInsert = await dispatch('insertMessage', [data.uid, data.text, id, data.from, to, data.createdAt, data.updatedAt, data.status, recipientStatus])
+    console.log('insert message :', data)
+    const resultInsert = await dispatch('insertMessage', [data.uid, data.text, id, data.from, to, data.createdAt, data.updatedAt, data.status, recipientStatus, data.mediaId, data.mediaType, '', data.thumb])
     rowId = resultInsert.insertId
   }
 
   // if user already in chat detail add message to list current chat
   if (id === state.currentUserId) {
     if (dataExists) {
+      console.log('update message')
       commit('updateMessage', {
-        message: data.text,
-        rowid: rowId,
+        // message: data.text,
+        // rowid: rowId,
         _id: data.uid,
-        contact: id,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
-        fromid: data.from,
+        // contact: id,
+        // createdAt: data.createdAt,
+        // updatedAt: data.updatedAt,
+        // fromid: data.from,
         status: data.status
       })
     } else {
@@ -484,7 +472,10 @@ export async function addMessage ({ state, commit, dispatch }, data) {
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
         fromid: data.from,
-        status: data.status
+        status: data.status,
+        mediaId: data.mediaId,
+        mediaType: data.mediaType,
+        thumb: data.thumb
       })
     }
 
@@ -515,13 +506,83 @@ export async function addMessage ({ state, commit, dispatch }, data) {
   }
 }
 
+export async function downloadMedia ({ state, commit, dispatch }, uid) {
+  const message = await dispatch('getMessageByUID', uid)
+  console.log('download media id : ', message.mediaId)
+  const media = await this._vm.$appFeathers.service('media').get(message.mediaId)
+  console.log('downlaod file : ', media.filename)
+  console.log('downlaod file : ', this._vm.$socket.io.uri)
+  const baseUrl = this._vm.$socket.io.uri
+
+  commit('updateMessage', {
+    _id: uid,
+    downloading: true
+  })
+
+  if (message.mediaType === '1' || message.mediaType === 1) {
+    const filename = await new Promise((resolve, reject) => {
+      window.requestFileSystem(window.LocalFileSystem.PERSISTENT, 0, (fileSystem) => {
+        console.log('full path', fileSystem.root.fullPath)
+        fileSystem.root.getDirectory('media', { create: true }, (dir) => {
+          console.log('got dir')
+          console.log(dir)
+          var fileTransfer = new window.FileTransfer()
+          fileTransfer.download(
+            baseUrl + '/uploads/' + media.filename,
+            dir.nativeURL + media.filename,
+            (theFile) => {
+              console.log(theFile)
+              console.log('download complete: ' + theFile.toURL())
+              resolve(theFile.toURL())
+              // showLink(theFile.toURI())
+            },
+            (error) => {
+              console.log('download error source ' + error.source)
+              console.log('download error target ' + error.target)
+              console.log('upload error code: ' + error.code)
+              console.log(error)
+              resolve(false)
+            }
+          )
+        })
+      }, (fail) => {
+        resolve(false)
+      })
+    })
+    if (filename) {
+      this._vm.$appFeathers.service('media').patch(null, { $pull: { to: state.user._id } }, { query: { _id: message.mediaId } })
+
+      console.log('localFIle', filename)
+      const imgCordova = await new Promise((resolve, reject) => {
+        window.resolveLocalFileSystemURL(filename, (fileEntry) => {
+          console.log('file entry', fileEntry)
+          fileEntry.file((file) => {
+            resolve(file)
+          }, function (e) {
+            reject(e)
+          })
+        }, function (e) {
+          reject(e)
+        })
+      })
+      dispatch('updateMessageLocalFile', {
+        _id: uid,
+        localFile: imgCordova.localURL
+      })
+      commit('updateMessage', {
+        _id: uid,
+        downloading: false,
+        localFile: imgCordova.localURL
+      })
+    }
+  }
+}
+
 // check read message on read event
 export function readMessage ({ state, commit, dispatch }, data) {
-  console.log('start read message', data)
   db.transaction((tx) => {
     _.forEach(data.uids, (uid) => {
       tx.executeSql('SELECT * FROM message WHERE _id = ?', [uid], (tx, messageResult) => {
-        console.log('total message', messageResult)
         let selects = messageResult.rows._array
         if (!selects) {
           selects = messageResult.rows
@@ -532,10 +593,9 @@ export function readMessage ({ state, commit, dispatch }, data) {
 
           var match = _.find(newRecipientStatus, { _id: data.from })
           var index = _.findIndex(newRecipientStatus, { _id: data.from })
-          newRecipientStatus.splice(index, 1, { ...match, status: data.status })
+          newRecipientStatus.splice(index, 1, { ...match, status: match.status > data.status ? match.status : data.status })
 
           const status = _.min(newRecipientStatus, o => o.status).status
-          console.log('start update')
           tx.executeSql('UPDATE message SET status = ?, recipientStatus = ? WHERE _id = ?', [status, JSON.stringify(newRecipientStatus), uid], (tx, messageResult) => {
             if (state.currentUserId === data.from) {
               commit('updateMessage', { ...message, recipientStatus: newRecipientStatus, status: status })
@@ -594,68 +654,48 @@ export function setReadCurrentChat ({ state, commit, dispatch }, data) {
   })
 }
 
-export async function doSendMedia ({ state, commit, dispatch }) {
-  const img = await new Promise((resolve, reject) => {
-    navigator.camera.getPicture((imageURI) => {
-      console.log('%c-imageURI', 'color: yellow;', imageURI)
-      resolve(imageURI)
-    }, (error) => {
-      reject(error)
-    }, {
-      quality: 50,
-      sourceType: window.Camera.PictureSourceType.PHOTOLIBRARY,
-      destinationType: window.Camera.DestinationType.FILE_URI,
-      encodingType: window.Camera.EncodingType.JPEG
-    })
-  })
-  const ret = await dispatch('uploadFile', { img })
-  // return ret
-  const mediaId = ret.data._id
-  console.log(mediaId)
-  await dispatch('sendChat', {
-    mediaId
-  })
-}
-
 export async function uploadFile ({ commit, state, rootState }, { img, type }) {
+  console.log('start uplaod ', img)
   const fileCompress = await new Promise((resolve, reject) => {
     let options = {}
     options = {
       uri: img,
-      folderName: 'compress',
+      folderName: 'compressx',
       quality: 90,
-      width: 300,
-      height: 300,
+      width: 600,
+      height: 600,
       base64: false,
       fit: false
     }
     window.ImageResizer.resize(options,
       function (image) {
-        console.log('file compress: ', image)
+        console.log('file compress untuk upload: ', image)
         resolve(image)
       }, function (e) {
-        console.log('error compress', e)
+        console.log('error compress untuk upload', e)
         reject(e)
       })
   })
-  console.log('file comprese', fileCompress)
+  console.log('file comprese upload', img, type)
   return await new Promise((resolve, reject) => {
     var fd = new FormData()
     window.resolveLocalFileSystemURL(fileCompress, (fileEntry) => {
       console.log('file entry', fileEntry)
       fileEntry.file((file) => {
+        console.log(file)
         var reader = new FileReader()
-        reader.onloadend = (e) => {
+        var axios = this._vm.$chatAxios
+        reader.onloadend = function (e) {
           var imgBlob = new Blob([this.result], { type: type })
           fd.append('file', imgBlob)
-          console.log(fd, fd)
+          console.log(fd, this.result)
 
-          this._vm.$chatAxios.post('/uploads', fd, {
+          axios.post('/uploads', fd, {
             headers: {
               'Content-Type': 'multipart/form-data'
             }
           }).then(retAxios => {
-            console.log('sukses upload')
+            console.log('sukses upload', retAxios)
             resolve(retAxios)
           }).catch(e => {
             reject(e)

@@ -1,3 +1,5 @@
+import { uid } from 'quasar'
+
 export function getMessageByUID ({ state, commit, dispatch }, uid) {
   return new Promise((resolve, reject) => {
     this._vm.$db.transaction(async (tx) => {
@@ -10,7 +12,7 @@ export function getMessageByUID ({ state, commit, dispatch }, uid) {
           const message = selects[0]
           resolve(message)
         } else {
-          reject(false)
+          resolve(false)
         }
       })
     }, () => {
@@ -24,7 +26,7 @@ export function getMessageByUID ({ state, commit, dispatch }, uid) {
 export function insertMessage ({ state }, data) {
   return new Promise((resolve, reject) => {
     this._vm.$db.transaction(async (tx) => {
-      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?,?,?,?,?)', data, (tx, result) => {
+      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)', data, (tx, result) => {
         resolve(result)
       })
     }, (e) => {
@@ -39,7 +41,27 @@ export function insertMessage ({ state }, data) {
 export function updateMessageStatus ({ state }, data) {
   return new Promise((resolve, reject) => {
     this._vm.$db.transaction(async (tx) => {
-      tx.executeSql('UPDATE message SET status = ?, recipientStatus = ? WHERE _id = ?', data, (tx, result) => {
+      tx.executeSql('UPDATE message SET status = ?, recipientStatus = ? WHERE _id = ? and status < ?', [
+        data.status,
+        data.recipientStatus,
+        data.uid,
+        data.status
+      ], (tx, result) => {
+        resolve(result)
+      })
+    }, (e) => {
+      console.log(e)
+      reject(false)
+    }, () => {
+      // reject(false)
+    })
+  })
+}
+
+export function updateMessageLocalFile ({ state }, { localFile, _id }) {
+  return new Promise((resolve, reject) => {
+    this._vm.$db.transaction(async (tx) => {
+      tx.executeSql('UPDATE message SET localFile = ? WHERE _id = ?', [localFile, _id], (tx, result) => {
         resolve(result)
       })
     }, (e) => {
@@ -60,7 +82,7 @@ export function updateConv ({ state, commit, dispatch }, data) {
       }
       if (selects.length > 0) {
         const conv = selects[0]
-        console.log('mulai update conv')
+        // console.log('mulai update conv')
         tx.executeSql('UPDATE conv SET message = ?, updatedAt = ?, unreadCount = ?, name = ?, phone = ?  WHERE convid = ?', [data.message, data.updatedAt, state.currentUserId === data.convid ? 0 : conv.unreadCount + 1, data.name, data.phone, data.convid], (tx, messageResult) => {
           dispatch('loadConv')
         })
@@ -74,7 +96,7 @@ export function updateConv ({ state, commit, dispatch }, data) {
   }, (e) => {
     console.log('update conv gagal', e)
   }, () => {
-    console.log('update conv success')
+    // console.log('update conv success')
   })
 }
 
@@ -86,6 +108,77 @@ export function updateConvToZero ({ state, commit, dispatch }, convid) {
   }, (e) => {
     console.log('update conv gagal', e)
   }, () => {
-    console.log('update conv success')
+    // console.log('update conv success')
+  })
+}
+
+export function saveChat ({ state, commit, dispatch }, { text, mediaId, mediaType, localFile, thumb }) {
+  return new Promise((resolve, reject) => {
+    this._vm.$db.transaction(async (tx) => {
+      const _uid = uid()
+      const recipientStatus = [{ _id: state.currentUserId, status: 0 }]
+      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)', [_uid, text, state.currentUserId, state.user._id, JSON.stringify([state.currentUserId]), new Date().toISOString(), new Date().toISOString(), 0, JSON.stringify(recipientStatus), mediaId, mediaType, localFile, thumb], (tx, result) => {
+        commit('addMessage', {
+          message: text,
+          rowid: result.insertId,
+          _id: _uid,
+          contact: state.currentUserId,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          fromid: state.user._id,
+          mediaType,
+          localFile,
+          thumb,
+          mediaId,
+          status: 0
+        })
+      })
+    }, (e) => {
+      reject(e)
+    }, () => {
+      console.log('insert ok')
+      dispatch('findContactDetail', state.currentUserId).then((c) => {
+        console.log('insert ok 2')
+        dispatch('updateConv', {
+          message: text,
+          convid: state.currentUserId,
+          name: c.name,
+          phone: c.phone,
+          updatedAt: new Date().toISOString()
+        }).then(() => {
+          console.log('insert ok 3')
+          resolve(true)
+        }).catch(e => {
+          console.log(e)
+        })
+      }).catch(e => {
+        console.log(e)
+      })
+    })
+  })
+}
+
+export function loadLocalContact ({ state, commit }) {
+  console.log('load local contact')
+  return new Promise((resolve, reject) => {
+    this._vm.$db.transaction(function (tx) {
+      tx.executeSql('SELECT * FROM contact', [], (tx, rs) => {
+        let selects = rs.rows._array
+        if (!selects) {
+          selects = rs.rows
+        }
+        console.log('contact', selects.length)
+        if (selects.length > 0) {
+          commit('contacts', selects)
+          resolve(selects)
+        } else {
+          console.log('empty user')
+          reject('user g ketemu')
+        }
+      }, function (tx, error) {
+        console.log('total user e ', error)
+        reject(error)
+      })
+    })
   })
 }

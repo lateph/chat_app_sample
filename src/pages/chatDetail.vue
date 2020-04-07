@@ -32,11 +32,12 @@
     </q-header>
 
     <q-page-container>
-      <q-page  class="flex q-pa-sm">
-         <q-scroll-area
+      <q-page  class="flex q-pa-sm" id="scroll-target-id" style="overflow: scroll">
+        <q-scroll-area
           ref="scrollArea"
+          scroll-target="#scroll-target-id"
           class="full-width q-px-sm"
-          content-style="height: 100%;"
+          @scroll="onScrollSecond"
         >
           <!-- <q-chat-message
             class="q-pl-md q-pr-md"
@@ -59,9 +60,10 @@
               v-if="message.fromid == $store.state.chat.user._id"
             >
               <div
-                class="bg-green-2 q-pa-xs row"
-                style="max-width:70%; min-width:50px; border-radius:6px;"
+                class="bg-green-2 q-pa-xs"
+                style="max-width:70%; min-width:150px; border-radius:6px; overflow: hidden"
               >
+                <img :src="message.localFile" style="max-height: 300px;max-width: 100%">
                 <!-- prettier-ignore -->
                 <div class="chatBubble">{{ message.message}}<span class="text-blue-2" style="margin-left:50px;">|</span></div>
 
@@ -92,9 +94,25 @@
               v-if="message.fromid != $store.state.chat.user._id"
             >
               <div
-                class="bg-grey-3 q-pa-xs row"
+                class="bg-grey-3 q-pa-xs"
                 style="max-width:70%; min-width:50px; border-radius:6px;"
               >
+                <!-- image me chat -->
+                <div v-if="message.mediaType == 1">
+                  <q-img :src="message.thumb" style="width: 200px; border-radius:3px;" v-if="!message.localFile">
+                    <q-btn
+                      :loading="message.downloading === true"
+                      @click="download(message._id)"
+                      outline
+                      class="absolute-center"
+                      round
+                      color="white"
+                      icon="get_app"
+                    />
+                  </q-img>
+                  <q-img :src="message.localFile" style="width: 200px; border-radius:3px;" v-if="message.localFile"></q-img>
+                </div>
+
                 <!-- prettier-ignore -->
                 <div class="chatBubble">{{ message.message}}<span class="text-grey-3" style="margin-left:35px;">|</span></div>
 
@@ -160,6 +178,8 @@
 // import { scroll } from 'quasar'
 // const { getScrollTarget, setScrollPosition } = scroll
 import { mapState } from 'vuex'
+// import { scroll } from 'quasar'
+// const { getScrollHeight } = scroll
 export default {
   // name: 'PageName',
   computed: mapState('chat', ['messages']),
@@ -175,47 +195,63 @@ export default {
   },
   data () {
     return {
-      message: null,
+      message: '',
       showSendBut: true,
       unwatch: null,
-      typing: false
+      typing: false,
+      imgTest: 'img',
+      fistDone: false,
+      fetching: false,
+      loadNotDone: true,
+      eachLoad: 5
     }
   },
-  beforeRouteLeave (to, from, next) {
-    this.unwatch()
-    this.$store.dispatch('chat/removeCurrent')
-    next()
-  },
+  // beforeRouteLeave (to, from, next) {
+  //   this.unwatch()
+  //   // this.$store.dispatch('chat/removeCurrent')
+  //   next()
+  // },
   mounted () {
-    console.log(this.$router)
-    this.$store.dispatch('chat/setCurrent', this.$router.currentRoute.params.id).then(() => {
-      this.$nextTick(() => {
-        setTimeout(() => {
-          this.animateScroll(10)
-        }, 100)
-      })
+    console.log('scroll area', this.$refs.scrollArea.scrollPosition)
+    this.$store.dispatch('chat/setCurrent', this.$router.currentRoute.params.id)
+
+    this.$store.dispatch('chat/sendPendingChat').then(() => {
     })
 
-    this.unwatch = this.$store.watch(
-      (state, getters) => state.chat.dataMessage,
-      (newValue, oldValue) => {
-        console.log(`Updating from ${oldValue.length} to ${newValue.length}`)
-
-        // Do whatever makes sense now
-        if (oldValue.length !== newValue.length && oldValue.length !== 0 && newValue.length !== 0) {
-          this.$nextTick(() => {
-            this.animateScroll(300)
-          })
-        } else {
-          this.$nextTick(() => {
-            this.animateScroll(300)
-          })
-        }
-      }
-    )
+    this.firstLoad()
     console.log(this.$socket)
   },
   methods: {
+    onScrollSecond () {
+      if (this.$refs.scrollArea.scrollPosition === 0 && this.fistDone && this.loadNotDone && !this.fetching) {
+        const heightBefore = this.$refs.scrollArea.scrollPosition
+        this.fetching = true
+        this.$store.dispatch('chat/loadMessage', this.eachLoad).then(() => {
+          this.$nextTick(() => {
+            const heightAfter = this.$refs.scrollArea.scrollPosition
+            // scrollPosition = getScrollPosition(this.scrollContainer),
+            const heightDifference = heightAfter - heightBefore
+            console.log('jancok', heightDifference)
+            this.$refs.scrollArea.setScrollPosition(300)
+            this.fetching = false
+          })
+        })
+      }
+    },
+    firstLoad () {
+      this.$store.dispatch('chat/loadMessage', 1).then(() => {
+        this.$nextTick(() => {
+          setTimeout(() => {
+            if (this.$refs.scrollArea.scrollSize < this.$refs.scrollArea.containerHeight) {
+              this.firstLoad()
+            } else {
+              this.fistDone = true
+              this.animateScroll(300)
+            }
+          }, 10)
+        })
+      })
+    },
     showBottomSheet (grid) {
       this.$q
         .bottomSheet({
@@ -249,17 +285,87 @@ export default {
           ]
         })
         .onOk(action => {
-          this.selectImage()
+          console.log('actiuon', action)
+          switch (action.id) {
+            case 'photo':
+              this.selectImage(window.Camera.PictureSourceType.PHOTOLIBRARY)
+              break
+            case 'camera':
+              console.log('camera')
+              this.selectImage(window.Camera.PictureSourceType.CAMERA)
+              break
+            default:
+              break
+          }
         })
     },
-    async selectImage () {
+    async selectImage (source) {
       try {
-        await this.$store.dispatch('chat/doSendMedia', {
-          type: 'image/jpg'
+        const img = await new Promise((resolve, reject) => {
+          navigator.camera.getPicture((imageURI) => {
+            console.log('%c-imageURI', 'color: yellow;', imageURI)
+            resolve(imageURI)
+          }, (error) => {
+            reject(error)
+          }, {
+            quality: 50,
+            sourceType: source,
+            destinationType: window.Camera.DestinationType.FILE_URI,
+            encodingType: window.Camera.EncodingType.JPEG
+          })
         })
+        const fileCompress = await new Promise((resolve, reject) => {
+          let options = {}
+          options = {
+            uri: img,
+            folderName: 'compress',
+            quality: 90,
+            width: 600,
+            height: 600,
+            base64: false,
+            fit: false
+          }
+          window.ImageResizer.resize(options,
+            function (image) {
+              console.log('file compress: ', image)
+              resolve(image)
+            }, function (e) {
+              console.log('error compress', e)
+              reject(e)
+            })
+        })
+        const imgCordova = await new Promise((resolve, reject) => {
+          window.resolveLocalFileSystemURL(fileCompress, (fileEntry) => {
+            console.log('file entry', fileEntry)
+            fileEntry.file((file) => {
+              resolve(file)
+            }, function (e) {
+              reject(e)
+            })
+          }, function (e) {
+            reject(e)
+          })
+        })
+        console.log('image', imgCordova)
+        // console.log('thumb', thumb)
+        this.imgTest = imgCordova.localURL
+        await this.$store.dispatch('chat/saveChat', {
+          text: this.message,
+          mediaType: 1,
+          mediaId: JSON.stringify({
+            file: img,
+            type: imgCordova.type
+          }),
+          localFile: imgCordova.localURL
+        })
+
+        this.$store.dispatch('chat/sendPendingChat')
       } catch (error) {
         console.log(error)
       }
+    },
+    download (uid) {
+      this.$store.dispatch('chat/downloadMedia', uid)
     },
     shiftPlusEnter (e) {
       if (this.$q.platform.is.desktop) {
@@ -286,7 +392,6 @@ export default {
 
       // const target = getScrollTarget(this.$refs.scrollArea)
       // const duration = 500
-      console.log('cok scroll' + this.$refs.scrollArea.scrollSize)
       this.$refs.scrollArea.setScrollPosition(this.$refs.scrollArea.scrollSize, time)
       // setScrollPosition(target, offset, duration)
     },
@@ -294,13 +399,19 @@ export default {
       // clear the textarea
       // console.log(this.$store)
       // save in store to be shown in message
-      await this.$store.dispatch('chat/saveChat', {
-        text: this.message
+      const a = await this.$store.dispatch('chat/saveChat', {
+        text: this.message,
+        mediaType: 0,
+        mediaId: '',
+        localFile: ''
       })
+      console.log('kok insert', a)
+
+      this.animateScroll(100)
 
       this.$store.dispatch('chat/sendPendingChat')
 
-      this.message = null
+      this.message = ''
     },
     async postCustoms (evt) {
       const obj = {

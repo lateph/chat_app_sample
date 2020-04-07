@@ -4,13 +4,15 @@ const feathers = require('@feathersjs/feathers')
 const socketio = require('@feathersjs/socketio-client')
 const io = require('socket.io-client')
 import axios from 'axios'
+// const baseUrl = 'http://192.168.1.102:3030'
+const baseUrl = 'http://159.89.205.235:3030'
 const chatInstance = axios.create({
-  baseURL: 'http://192.168.1.102:3030'
+  baseURL: baseUrl
 })
 // const VueSocketIO = require('vue-socket.io')
 // import createSocketIoPlugin from 'vuex-socketio';
 
-const socket = io('http://192.168.1.102:3030')
+const socket = io(baseUrl)
 // const socket = io('http://localhost:3030')
 // const socket = io('http://159.89.205.235:3030')
 // const socketPlugin = createSocketIoPlugin(socket);
@@ -29,14 +31,11 @@ const _deviceready = (Vue, store, router) => {
   Vue.prototype.$appFeathers = app
   Vue.prototype.$chatAxios = chatInstance
 
-  console.log(store)
   socket.on('connect', () => {
-    console.log('jwt', router)
     if (jwt) {
       store.dispatch('chat/doLoginJwt', {
         jwt
       }).then(data => {
-        console.log('okebanget', data)
       })
     }
   })
@@ -46,11 +45,13 @@ const _deviceready = (Vue, store, router) => {
       store.dispatch('chat/addMessage', {
         ...message,
         _source: 'socket'
+      }).then(() => {
+      }).catch((e) => {
+        console.log(e)
       })
     })
   app.service('onlineuser')
     .on('patched', message => {
-      console.log('jancok online e berubah', message)
       store.commit('chat/setCurrentOnlineUser', message)
     })
   app.service('customs')
@@ -68,7 +69,6 @@ const _deviceready = (Vue, store, router) => {
     })
   app.service('users')
     .on('created', message => {
-      console.log('users')
       // if (message.text === 'typing' || message.text === 'untyping') {
       store.dispatch('chat/reloadContact', message)
       // }
@@ -83,16 +83,13 @@ export default async ({ router, store, Vue }) => {
   Vue.use(require('vue-moment'))
 
   if (window.cordova) {
-    console.log('cordova present')
     document.addEventListener('deviceready', () => {
       _deviceready(Vue, store, router)
     }, false)
     document.addEventListener('pause', () => {
-      console.log('pause')
       store.commit('chat/pause')
     }, false)
     document.addEventListener('resume', () => {
-      console.log('resume')
       store.commit('chat/resume')
     }, false)
   } else {
