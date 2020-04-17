@@ -9,6 +9,10 @@ export function contacts (state, data) {
   state.contacts = data
 }
 
+export function insertContact (state, data) {
+  state.contacts = [...state.contacts, data]
+}
+
 export function messages (state, data) {
   state.messages = _.map(data, (e) => {
     return convert(state, e)
@@ -90,4 +94,12 @@ export function resume (state) {
 
 export function pause (state) {
   state.appRunning = false
+}
+
+export function setSelectedForGroup (state, data) {
+  state.selectedCreateGroup = data
+}
+
+export function setPrivatekey (state, data) {
+  state.privateKey = data
 }

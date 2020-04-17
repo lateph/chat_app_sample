@@ -13,12 +13,17 @@
   "author": "Apache Cordova Team",
   "license": "Apache-2.0",
   "dependencies": {
+    "cordova": "^9.0.0",
     "cordova-android": "^8.1.0",
+    "cordova-ourcodeworld-filebrowser": "git+https://github.com/ourcodeworld/cordova-ourcodeworld-filebrowser.git",
+    "cordova-plugin-audio-recorder": "^1.1.0",
     "cordova-plugin-badge": "^0.8.8",
     "cordova-plugin-camera": "^4.1.0",
+    "cordova-plugin-chooser": "git+https://github.com/cyph/cordova-plugin-chooser.git",
     "cordova-plugin-contacts": "^3.0.1",
     "cordova-plugin-device": "^2.0.3",
     "cordova-plugin-file": "^6.0.2",
+    "cordova-plugin-file-opener2": "git+https://github.com/lateph/cordova-plugin-file-opener2.git",
     "cordova-plugin-file-transfer": "^1.7.1",
     "cordova-plugin-local-notification": "git+https://github.com/katzer/cordova-plugin-local-notifications.git",
     "cordova-plugin-simple-image-resizer": "git+https://github.com/lateph/cordova-plugin-image-resizer.git",
@@ -52,7 +57,12 @@
       "cordova-plugin-simple-image-resizer": {
         "ANDROID_EXIFINTERFACES_VERSION": "27.+"
       },
-      "cordova-plugin-file-transfer": {}
+      "cordova-plugin-file-transfer": {},
+      "cordova-plugin-chooser": {},
+      "cordova-plugin-file-opener2": {
+        "ANDROID_SUPPORT_V4_VERSION": "27.+"
+      },
+      "cordova-plugin-audio-recorder": {}
     },
     "platforms": [
       "android",

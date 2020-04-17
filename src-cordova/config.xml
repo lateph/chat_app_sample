@@ -31,5 +31,4 @@
     <allow-navigation href="about:*" />
     <preference name="AutoHideSplashScreen" value="false" />
     <preference name="ShowSplashScreenSpinner" value="false" />
-    <allow-navigation href="http://192.168.1.102:8080" />
 </widget>

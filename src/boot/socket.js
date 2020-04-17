@@ -48,6 +48,7 @@ const _deviceready = (Vue, store, router) => {
       }).then(() => {
       }).catch((e) => {
         console.log(e)
+        console.log(e.message)
       })
     })
   app.service('onlineuser')

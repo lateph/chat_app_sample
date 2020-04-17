@@ -7,6 +7,9 @@ const routes = [
       { path: '', component: () => import('pages/login.vue') },
       { path: '/signup', component: () => import('pages/signup.vue') },
       { path: '/feeds', component: () => import('pages/chatList.vue') },
+      { path: '/createChat', component: () => import('pages/createChat.vue') },
+      { path: '/createGroup', component: () => import('pages/createGroup.vue') },
+      { path: '/createGroupDetail', component: () => import('pages/createGroupDetail.vue') },
       { path: '/detail/:id', component: () => import('pages/chatDetail.vue') }
     ]
   }

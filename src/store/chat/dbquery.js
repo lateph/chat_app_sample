@@ -38,6 +38,21 @@ export function insertMessage ({ state }, data) {
   })
 }
 
+export function insertContact ({ state }, row) {
+  return new Promise((resolve, reject) => {
+    this._vm.$db.transaction(async (tx) => {
+      tx.executeSql('INSERT INTO contact VALUES (?,?,?,?,?,?)', [row._id, row.email, row.name, row.phone, row.country, row.publicKey], (tx, result) => {
+        resolve(result)
+      })
+    }, (e) => {
+      console.log(e)
+      reject(false)
+    }, () => {
+      // reject(false)
+    })
+  })
+}
+
 export function updateMessageStatus ({ state }, data) {
   return new Promise((resolve, reject) => {
     this._vm.$db.transaction(async (tx) => {
@@ -162,7 +177,7 @@ export function loadLocalContact ({ state, commit }) {
   console.log('load local contact')
   return new Promise((resolve, reject) => {
     this._vm.$db.transaction(function (tx) {
-      tx.executeSql('SELECT * FROM contact', [], (tx, rs) => {
+      tx.executeSql('SELECT rowid, _id, email, name, phone, country FROM contact WHERE publickey != ?', [''], (tx, rs) => {
         let selects = rs.rows._array
         if (!selects) {
           selects = rs.rows
@@ -179,6 +194,100 @@ export function loadLocalContact ({ state, commit }) {
         console.log('total user e ', error)
         reject(error)
       })
+    })
+  })
+}
+
+export function getSetting ({ commit }, { key }) {
+  return new Promise((resolve, reject) => {
+    this._vm.$db.transaction(async (tx) => {
+      tx.executeSql('SELECT * FROM setting WHERE key = ?', [key], (tx, messageResult) => {
+        let selects = messageResult.rows._array
+        if (!selects) {
+          selects = messageResult.rows
+        }
+        if (selects.length > 0) {
+          const message = selects[0]
+          resolve(message.value)
+        } else {
+          reject(false)
+        }
+      })
+    }, () => {
+      reject(false)
+    }, () => {
+      // reject(false)
+    })
+  })
+}
+
+export function updateSetting ({ state }, { key, value }) {
+  return new Promise((resolve, reject) => {
+    this._vm.$db.transaction(async (tx) => {
+      tx.executeSql('UPDATE setting SET value = ? WHERE key = ?', [value, key], (tx, result) => {
+        resolve(value)
+      })
+    }, (e) => {
+      console.log(e)
+      reject(false)
+    }, () => {
+      // reject(false)
+    })
+  })
+}
+
+export async function setSetting ({ dispatch }, { key, value }) {
+  try {
+    await dispatch('getSetting', {
+      key,
+      value
+    })
+    await dispatch('updateSetting', {
+      key,
+      value
+    })
+  } catch (error) {
+    await dispatch('insertSetting', {
+      key,
+      value
+    })
+  }
+}
+
+export function insertSetting ({ state }, { key, value }) {
+  return new Promise((resolve, reject) => {
+    this._vm.$db.transaction(async (tx) => {
+      tx.executeSql('INSERT INTO setting VALUES (?,?)', [key, value], (tx, result) => {
+        resolve(result)
+      })
+    }, (e) => {
+      console.log(e)
+      reject(false)
+    }, () => {
+      // reject(false)
+    })
+  })
+}
+
+export function getPublicKey ({ commit }, _id) {
+  return new Promise((resolve, reject) => {
+    this._vm.$db.transaction(async (tx) => {
+      tx.executeSql('SELECT * FROM contact WHERE _id = ?', [_id], (tx, messageResult) => {
+        let selects = messageResult.rows._array
+        if (!selects) {
+          selects = messageResult.rows
+        }
+        if (selects.length > 0 && selects[0].publickey) {
+          const message = selects[0]
+          resolve(JSON.parse(message.publickey))
+        } else {
+          reject(false)
+        }
+      })
+    }, () => {
+      reject(false)
+    }, () => {
+      // reject(false)
     })
   })
 }

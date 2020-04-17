@@ -9,6 +9,8 @@ export default function () {
     onlineUser: null,
     custom: null,
     convs: [],
-    appRunning: true
+    appRunning: true,
+    selectedCreateGroup: [],
+    privateKey: ''
   }
 }

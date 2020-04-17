@@ -61,9 +61,12 @@
             >
               <div
                 class="bg-green-2 q-pa-xs"
-                style="max-width:70%; min-width:150px; border-radius:6px; overflow: hidden"
+                style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden"
               >
-                <img :src="message.localFile" style="max-height: 300px;max-width: 100%">
+                <img :src="message.localFile" style="max-height: 300px;max-width: 100%" v-if="message.mediaType == 1" v-on:click="openFile(message.localFile)">
+                <q-btn unelevated color="green-4" class="q-pa-xs " style="width: 250px;border-radius:6px" v-if="message.mediaType == 2 || message.mediaType == 3" @click="openFile(JSON.parse(message.mediaId).file)">
+                  {{ JSON.parse(message.mediaId).name }}
+                </q-btn>
                 <!-- prettier-ignore -->
                 <div class="chatBubble">{{ message.message}}<span class="text-blue-2" style="margin-left:50px;">|</span></div>
 
@@ -95,13 +98,14 @@
             >
               <div
                 class="bg-grey-3 q-pa-xs"
-                style="max-width:70%; min-width:50px; border-radius:6px;"
+                style="max-width:80%; min-width:50px; border-radius:6px;"
               >
                 <!-- image me chat -->
                 <div v-if="message.mediaType == 1">
                   <q-img :src="message.thumb" style="width: 200px; border-radius:3px;" v-if="!message.localFile">
                     <q-btn
                       :loading="message.downloading === true"
+                      :percentage="message.percentage"
                       @click="download(message._id)"
                       outline
                       class="absolute-center"
@@ -110,7 +114,16 @@
                       icon="get_app"
                     />
                   </q-img>
-                  <q-img :src="message.localFile" style="width: 200px; border-radius:3px;" v-if="message.localFile"></q-img>
+                  <q-img :src="message.localFile" style="width: 200px; border-radius:3px;" v-if="message.localFile" @click="openFile(message.localFile)"></q-img>
+                </div>
+
+                <div v-if="message.mediaType == 2 || message.mediaType == 3">
+                  <q-btn unelevated :loading="message.downloading === true" :percentage="message.percentage" color="grey-7" icon="get_app" class="q-pa-xs " style="width: 250px;border-radius:6px" v-if="!message.localFile" @click="download(message._id)">
+                    {{ JSON.parse(message.thumb).name }}
+                  </q-btn>
+                  <q-btn unelevated color="grey-7" class="q-pa-xs " style="width: 250px;border-radius:6px" v-if="message.localFile" @click="openFile(message.localFile)">
+                    {{ JSON.parse(message.thumb).name }}
+                  </q-btn>
                 </div>
 
                 <!-- prettier-ignore -->
@@ -120,7 +133,7 @@
                   class="row justify-end full-width"
                   style="font-size: 10px; margin-top:-15px"
                 >
-                  <div>7:00pm</div>
+                  <div>{{ message.createdAt  | moment("from", "now") }}</div>
                 </div>
               </div>
             </div>
@@ -159,8 +172,8 @@
         />
       </div>
       <div class="row content-end q-pa-xs" v-if="showSendBut">
-        <q-btn flat dense icon="camera_alt" @click="selectImage"/>
-        <q-btn flat dense icon="mic" />
+        <q-btn flat dense icon="camera_alt" @click="openCamera"/>
+        <q-btn flat dense icon="mic" @click="recordAudio"/>
       </div>
       <div
         class="row content-end justify-center content-center"
@@ -273,7 +286,7 @@ export default {
             {
               label: 'Documents',
               icon: 'description',
-              id: 'description',
+              id: 'documents',
               color: 'green'
             },
             {
@@ -294,10 +307,86 @@ export default {
               console.log('camera')
               this.selectImage(window.Camera.PictureSourceType.CAMERA)
               break
+            case 'documents':
+              console.log('documents')
+              this.selectDocument()
+              break
             default:
               break
           }
         })
+    },
+    openCamera () {
+      this.selectImage(window.Camera.PictureSourceType.CAMERA)
+    },
+    async recordAudio () {
+      try {
+        const audioFile = await new Promise((resolve, reject) => {
+          navigator.device.audiorecorder.recordAudio((file) => {
+            resolve(JSON.parse(file))
+          }, (e) => {
+            reject(e)
+          })
+        })
+        console.log('audioFile', audioFile)
+
+        const dir = await new Promise((resolve, reject) => {
+          window.resolveLocalFileSystemURL(cordova.file.externalApplicationStorageDirectory, (dirEntry) => {
+            console.log(dirEntry)
+            dirEntry.filesystem.root.getDirectory('MGGCHAT', {
+              create: true,
+              exclusive: false
+            }, (dir) => {
+              resolve(dir)
+            }, (e) => {
+              reject(e)
+            })
+          }, function (e) {
+            reject(e)
+          })
+        })
+        console.log('dir', dir)
+        const fileCordova = await new Promise((resolve, reject) => {
+          window.resolveLocalFileSystemURL('file://' + audioFile.full_path, (fileEntry) => {
+            console.log('file entry', fileEntry)
+            fileEntry.moveTo(dir, audioFile.file_name, (mt) => {
+              mt.file((file) => {
+                resolve({
+                  file: file,
+                  fileEntry: mt
+                })
+              }, function (e) {
+                reject(e)
+              })
+            }, (e) => {
+              console.log('fail to copy')
+              reject(e)
+            })
+          }, function (e) {
+            console.log('file tidak ditemukan ?')
+            reject(e)
+          })
+        })
+
+        console.log('fileCordova', fileCordova)
+        await this.$store.dispatch('chat/saveChat', {
+          text: this.message,
+          mediaType: 3,
+          mediaId: JSON.stringify({
+            file: fileCordova.fileEntry.nativeURL,
+            type: fileCordova.file.type,
+            name: fileCordova.file.name
+          }),
+          localFile: fileCordova.nativeURL
+        })
+
+        this.animateScroll(100)
+
+        this.$store.dispatch('chat/sendPendingChat')
+      } catch (error) {
+        console.log(error)
+      }
+      // other params durationLimit, viewColor, backgroundColor
     },
     async selectImage (source) {
       try {
@@ -334,8 +423,114 @@ export default {
               reject(e)
             })
         })
+        const dir = await new Promise((resolve, reject) => {
+          window.resolveLocalFileSystemURL(cordova.file.externalApplicationStorageDirectory, (dirEntry) => {
+            console.log(dirEntry)
+            dirEntry.filesystem.root.getDirectory('MGGCHAT', {
+              create: true,
+              exclusive: false
+            }, (dir) => {
+              resolve(dir)
+            }, (e) => {
+              reject(e)
+            })
+          }, function (e) {
+            reject(e)
+          })
+        })
         const imgCordova = await new Promise((resolve, reject) => {
           window.resolveLocalFileSystemURL(fileCompress, (fileEntry) => {
+            console.log('file entry', fileEntry)
+            fileEntry.moveTo(dir, fileEntry.name, (mt) => {
+              mt.file((file) => {
+                resolve({
+                  file: file,
+                  fileEntry: mt
+                })
+              }, function (e) {
+                reject(e)
+              })
+            }, (e) => {
+              reject(e)
+            })
+          }, function (e) {
+            reject(e)
+          })
+        })
+        console.log('image', imgCordova)
+        // console.log('thumb', thumb)
+        await this.$store.dispatch('chat/saveChat', {
+          text: this.message,
+          mediaType: 1,
+          mediaId: JSON.stringify({
+            file: imgCordova.fileEntry.nativeURL,
+            type: imgCordova.file.type
+          }),
+          localFile: imgCordova.file.localURL
+        })
+
+        this.animateScroll(100)
+
+        this.$store.dispatch('chat/sendPendingChat')
+      } catch (error) {
+        console.log(error)
+      }
+    },
+    async selectDocument () {
+      try {
+        const file = await window.chooser.getFile()
+        const dir = await new Promise((resolve, reject) => {
+          window.resolveLocalFileSystemURL(cordova.file.externalApplicationStorageDirectory, (dirEntry) => {
+            console.log(dirEntry)
+            dirEntry.filesystem.root.getDirectory('MGGCHAT', {
+              create: true,
+              exclusive: false
+            }, (dir) => {
+              resolve(dir)
+            }, (e) => {
+              reject(e)
+            })
+          }, function (e) {
+            reject(e)
+          })
+        })
+        console.log('dir', dir)
+        const fileCordova = await new Promise((resolve, reject) => {
+          window.resolveLocalFileSystemURL(file.uri, (fileEntry) => {
+            console.log('file entry', fileEntry)
+            fileEntry.copyTo(dir, file.name, (file) => {
+              resolve(file)
+            }, (e) => {
+              console.log('fail to copy')
+              reject(e)
+            })
+          }, function (e) {
+            reject(e)
+          })
+        })
+        console.log('fileCordova', fileCordova)
+        await this.$store.dispatch('chat/saveChat', {
+          text: this.message,
+          mediaType: 2,
+          mediaId: JSON.stringify({
+            file: fileCordova.nativeURL,
+            type: file.mediaType,
+            name: file.name
+          }),
+          localFile: fileCordova.nativeURL
+        })
+
+        this.animateScroll(100)
+
+        this.$store.dispatch('chat/sendPendingChat')
+      } catch (error) {
+        console.log(error)
+      }
+    },
+    async openFile (file) {
+      try {
+        const fileCordova = await new Promise((resolve, reject) => {
+          window.resolveLocalFileSystemURL(file, (fileEntry) => {
             console.log('file entry', fileEntry)
             fileEntry.file((file) => {
               resolve(file)
@@ -346,22 +541,21 @@ export default {
             reject(e)
           })
         })
-        console.log('image', imgCordova)
-        // console.log('thumb', thumb)
-        this.imgTest = imgCordova.localURL
-        await this.$store.dispatch('chat/saveChat', {
-          text: this.message,
-          mediaType: 1,
-          mediaId: JSON.stringify({
-            file: img,
-            type: imgCordova.type
-          }),
-          localFile: imgCordova.localURL
-        })
-
-        this.$store.dispatch('chat/sendPendingChat')
+        console.log(fileCordova)
+        cordova.plugins.fileOpener2.showOpenWithDialog(
+          fileCordova.localURL,
+          fileCordova.type,
+          {
+            error: function (e) {
+              console.log('error', e)
+            },
+            success: function () {
+              console.log('file opened successfully')
+            }
+          }
+        )
       } catch (error) {
-        console.log(error)
+        console.log('error', error)
       }
     },
     download (uid) {

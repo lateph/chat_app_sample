@@ -48,7 +48,7 @@
         </q-list>
 
         <q-page-sticky position="bottom-right" :offset="[18, 18]">
-          <q-btn fab icon="question_answer" color="accent"  @click="startMessage"/>
+          <q-btn fab icon="question_answer" color="accent"  @click="$router.push('/createChat')"/>
         </q-page-sticky>
       </q-page>
       <q-page padding v-if="contacts.length > 0 && convs.length == 0" class="flex flex-center">
@@ -65,7 +65,7 @@
       </q-page>
     </q-page-container>
 
-    <q-dialog v-model="prompt" persistent>
+    <q-dialog v-model="prompt" full-width full-height>
       <q-card>
         <q-card-section>
           <div class="text-h6">Choose Contact</div>

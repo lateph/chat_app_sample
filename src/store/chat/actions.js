@@ -30,9 +30,10 @@ export async function doLogin ({ state, dispatch, commit }, { email, password, s
     password,
     strategy
   })
-  console.log(message)
+  console.log('logedin start')
   commit('user', message.user)
   dispatch('openDB')
+  await dispatch('loadKey')
   dispatch('updateToken', message.user._id)
   try {
     await dispatch('loadLocalContact')
@@ -68,6 +69,7 @@ export async function localDataLoad ({ state, dispatch, commit }, { jwt }) {
   })
   console.log('user decodde', decode)
   dispatch('openDB')
+  await dispatch('loadKey')
   try {
     await dispatch('loadLocalContact')
   } catch (error) {
@@ -122,12 +124,12 @@ export function updateToken ({ state, commit }, userId) {
   })
 }
 
-export async function sendChat ({ state, dispatch }, { text, localFile, uid, to, mediaType, mediaId }) {
+export async function sendChat ({ state, dispatch, getters }, { text, localFile, uid, to, mediaType, mediaId, createdAt, updatedAt }) {
   let _mediaId = ''
   let thumb = ''
   if (mediaType === 1 || mediaType === '1') {
     const mediaDetail = JSON.parse(mediaId)
-    const ret = await dispatch('uploadFile', { img: mediaDetail.file, type: mediaDetail.type })
+    const ret = await dispatch('uploadFile', { img: mediaDetail.file, type: mediaDetail.type, mediaType })
     _mediaId = ret.data._id
 
     thumb = await new Promise((resolve, reject) => {
@@ -152,14 +154,40 @@ export async function sendChat ({ state, dispatch }, { text, localFile, uid, to,
     })
     await this._vm.$appFeathers.service('media').patch(null, { to: to }, { query: { _id: _mediaId } })
   }
+  if (mediaType === 2 || mediaType === '2' || mediaType === 3 || mediaType === '3') {
+    console.log('upload file custom')
+    const mediaDetail = JSON.parse(mediaId)
+    const ret = await dispatch('uploadFile', { img: mediaDetail.file, type: mediaDetail.type, mediaType })
+    _mediaId = ret.data._id
+    thumb = JSON.stringify({
+      type: mediaDetail.mediaType,
+      name: mediaDetail.name
+    })
+  }
+
+  console.log('pubkey', getters.currentUser)
+  // @todo group need change
+  const publicKey = await dispatch('getPublicKey', state.currentUserId)
+
+  console.log('pubkey', publicKey)
+
+  const encText = await dispatch('encryptChatMessage', {
+    text,
+    publicKey: publicKey
+  })
+
+  console.log(encText)
+
   const retMessage = await this._vm.$appFeathers.service('messages').create({
     from: state.user._id,
     to: to,
-    text: text,
+    text: encText,
     mediaId: _mediaId,
     uid: uid,
     status: 1,
     mediaType,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
     thumb
   })
 
@@ -180,6 +208,8 @@ export async function sendPendingChat ({ dispatch }) {
             localFile: r.localFile,
             mediaType: r.mediaType,
             mediaId: r.mediaId,
+            createdAt: r.createdAt,
+            updatedAt: r.updatedAt,
             uid: r._id,
             to: JSON.parse(r.toids)
           })
@@ -286,8 +316,9 @@ export async function syncChat ({ state, commit, dispatch }) {
   })
 
   _.forEach(data.data, (r) => {
-    dispatch('addMessage', { ...r, status: 2 })
-    dispatch('setReceive', r)
+    dispatch('addMessage', { ...r, status: 2 }).then(() => {
+      dispatch('setReceive', r)
+    })
   })
 
   const dataReadEvents = await this._vm.$appFeathers.service('readevent').find({ query: { $limit: 99999, $sort: { createdAt: 1 }, to: state.user._id } })
@@ -357,7 +388,7 @@ export async function syncContact ({ state, commit, dispatch }) {
       db.transaction((tx) => {
         tx.executeSql('DELETE FROM contact', [])
         _.forEach(data.data, (row) => {
-          tx.executeSql('INSERT INTO contact VALUES (?,?,?,?,?)', [row._id, row.email, row.name, row.phone, row.country])
+          tx.executeSql('INSERT INTO contact VALUES (?,?,?,?,?,?)', [row._id, row.email, row.name, row.phone, row.country, row.publicKey])
         })
       }, function (error) {
         console.log('Transaction ERROR: ' + error.message)
@@ -374,17 +405,18 @@ export async function syncContact ({ state, commit, dispatch }) {
 export function openDB ({ state }) {
   console.log(window.sqlitePlugin)
   if (window.sqlitePlugin) {
-    db = window.sqlitePlugin.openDatabase({ name: 'chat08' + state.user._id + '.db', location: 'default' }, function (db) {}, function (error) { console.log('Open database ERROR: ' + JSON.stringify(error)) })
+    db = window.sqlitePlugin.openDatabase({ name: 'chat09' + state.user._id + '.db', location: 'default' }, function (db) {}, function (error) { console.log('Open database ERROR: ' + JSON.stringify(error)) })
     console.log('DB: SQLite')
   } else {
-    db = window.openDatabase('chat08' + state.user._id, '0.1', 'My list', 200000)
+    db = window.openDatabase('chat09' + state.user._id, '0.1', 'My list', 200000)
     console.log('DB: WebSQL')
   }
   this._vm.$db = db
   db.transaction((tx) => {
     tx.executeSql('CREATE TABLE IF NOT EXISTS message (_id, message, convid, fromid, toids, createdAt, updatedAt ,status, recipientStatus, mediaId, mediaType, localFile, thumb)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS conv (message, convid, name, phone, unreadCount INTEGER DEFAULT 0, updatedAt)')
-    tx.executeSql('CREATE TABLE IF NOT EXISTS contact (_id, email, name, phone, country)')
+    tx.executeSql('CREATE TABLE IF NOT EXISTS contact (_id, email, name, phone, country, publickey)')
+    tx.executeSql('CREATE TABLE IF NOT EXISTS setting (key, value)')
     tx.executeSql('CREATE INDEX IF NOT EXISTS convididx ON message (convid)')
     tx.executeSql('CREATE INDEX IF NOT EXISTS _ididx ON message (_id)')
     tx.executeSql('CREATE UNIQUE INDEX IF NOT EXISTS phone ON contact (phone)')
@@ -395,10 +427,14 @@ export function openDB ({ state }) {
   })
 }
 
-export async function findContactDetail ({ state }, id) {
+export async function findContactDetail ({ state, dispatch, commit }, id) {
   let c = _.find(state.contacts, c => c._id === id)
   if (!c) {
-    c = await this._vm.$appFeathers.service('users').get(id)
+    const data = await this._vm.$appFeathers.service('users').find({ query: { _id: id } })
+    c = data.data[0]
+    console.log('oke banget ', c, data)
+    await dispatch('insertContact', c)
+    commit('insertContact', c)
   }
   return c
 }
@@ -409,23 +445,31 @@ export async function addMessage ({ state, commit, dispatch }, data) {
   // @todo support group chat
   let id = ''
   let recipientStatus = ''
+  let dText = ''
   if (data.from === state.user._id) {
     id = data.to[0]
     recipientStatus = JSON.stringify(data.recipientStatus)
   } else {
     id = data.from
+    dText = await dispatch('decryptChatMessage', {
+      text: data.text,
+      privateKey: state.privateKey
+    })
   }
 
   // update conv
   // this will make list chat have last message inserted
   const contactDetail = await dispatch('findContactDetail', id)
-  dispatch('updateConv', {
-    message: data.text,
-    convid: id,
-    name: contactDetail.name,
-    phone: contactDetail.phone,
-    updatedAt: data.createdAt
-  })
+
+  if (data.from !== state.user._id) {
+    dispatch('updateConv', {
+      message: dText,
+      convid: id,
+      name: contactDetail.name,
+      phone: contactDetail.phone,
+      updatedAt: data.createdAt
+    })
+  }
 
   // check if data with id exists
   // if own chat it will be exists with same id since save to db first then send
@@ -445,7 +489,7 @@ export async function addMessage ({ state, commit, dispatch }, data) {
     console.log('update status by addMessage ' + data.uid, resultUpdate)
   } else {
     console.log('insert message :', data)
-    const resultInsert = await dispatch('insertMessage', [data.uid, data.text, id, data.from, to, data.createdAt, data.updatedAt, data.status, recipientStatus, data.mediaId, data.mediaType, '', data.thumb])
+    const resultInsert = await dispatch('insertMessage', [data.uid, dText, id, data.from, to, data.createdAt, data.updatedAt, data.status, recipientStatus, data.mediaId, data.mediaType, '', data.thumb])
     rowId = resultInsert.insertId
   }
 
@@ -454,7 +498,7 @@ export async function addMessage ({ state, commit, dispatch }, data) {
     if (dataExists) {
       console.log('update message')
       commit('updateMessage', {
-        // message: data.text,
+        // message: dText,
         // rowid: rowId,
         _id: data.uid,
         // contact: id,
@@ -465,7 +509,7 @@ export async function addMessage ({ state, commit, dispatch }, data) {
       })
     } else {
       commit('addMessage', {
-        message: data.text,
+        message: dText,
         rowid: rowId,
         _id: data.uid,
         contact: id,
@@ -482,11 +526,11 @@ export async function addMessage ({ state, commit, dispatch }, data) {
     // send chat status that already read
     if (id === state.currentUserId && data.from !== state.user._id) {
       dispatch('sendReadStatus', { uids: [data.uid], to: data.from, status: 3 })
-      if (!state.appRunning) {
+      if (!state.appRunning && window.cordova && window.cordova.plugins && window.cordova.plugins.notification) {
         dispatch('findContactDetail', id).then((c) => {
           cordova.plugins.notification.local.schedule({
             title: c.name,
-            text: data.text,
+            text: dText,
             foreground: true
           })
         })
@@ -494,11 +538,11 @@ export async function addMessage ({ state, commit, dispatch }, data) {
     }
   } else {
     console.log('open local notif')
-    if (data._source === 'socket' && cordova && cordova.plugins && cordova.plugins.notification) {
+    if (data._source === 'socket' && window.cordova && window.cordova.plugins && window.cordova.plugins.notification) {
       dispatch('findContactDetail', id).then((c) => {
         cordova.plugins.notification.local.schedule({
           title: c.name,
-          text: data.text,
+          text: dText,
           foreground: true
         })
       })
@@ -519,35 +563,51 @@ export async function downloadMedia ({ state, commit, dispatch }, uid) {
     downloading: true
   })
 
-  if (message.mediaType === '1' || message.mediaType === 1) {
-    const filename = await new Promise((resolve, reject) => {
-      window.requestFileSystem(window.LocalFileSystem.PERSISTENT, 0, (fileSystem) => {
-        console.log('full path', fileSystem.root.fullPath)
-        fileSystem.root.getDirectory('media', { create: true }, (dir) => {
-          console.log('got dir')
-          console.log(dir)
-          var fileTransfer = new window.FileTransfer()
-          fileTransfer.download(
-            baseUrl + '/uploads/' + media.filename,
-            dir.nativeURL + media.filename,
-            (theFile) => {
-              console.log(theFile)
-              console.log('download complete: ' + theFile.toURL())
-              resolve(theFile.toURL())
-              // showLink(theFile.toURI())
-            },
-            (error) => {
-              console.log('download error source ' + error.source)
-              console.log('download error target ' + error.target)
-              console.log('upload error code: ' + error.code)
-              console.log(error)
-              resolve(false)
-            }
-          )
+  if (message.mediaType === '1' || message.mediaType === 1 || message.mediaType === '2' || message.mediaType === 2 || message.mediaType === '3' || message.mediaType === 3) {
+    const dir = await new Promise((resolve, reject) => {
+      window.resolveLocalFileSystemURL(cordova.file.externalApplicationStorageDirectory, (dirEntry) => {
+        console.log(dirEntry)
+        dirEntry.filesystem.root.getDirectory('MGGCHAT', {
+          create: true,
+          exclusive: false
+        }, (dir) => {
+          resolve(dir)
+        }, (e) => {
+          reject(e)
         })
-      }, (fail) => {
-        resolve(false)
+      }, function (e) {
+        reject(e)
       })
+    })
+
+    const filename = await new Promise((resolve, reject) => {
+      var fileTransfer = new window.FileTransfer()
+      fileTransfer.onprogress = (event) => {
+        console.log('progress', event)
+        commit('updateMessage', {
+          _id: uid,
+          loaded: event.loaded,
+          total: event.total,
+          percentage: event.loaded / event.total * 100
+        })
+      }
+      fileTransfer.download(
+        baseUrl + '/uploads/' + media.filename,
+        dir.nativeURL + media.filename,
+        (theFile) => {
+          console.log(theFile)
+          console.log('download complete: ' + theFile.toURL())
+          resolve(theFile.toURL())
+          // showLink(theFile.toURI())
+        },
+        (error) => {
+          console.log('download error source ' + error.source)
+          console.log('download error target ' + error.target)
+          console.log('upload error code: ' + error.code)
+          console.log(error)
+          resolve(false)
+        }
+      )
     })
     if (filename) {
       this._vm.$appFeathers.service('media').patch(null, { $pull: { to: state.user._id } }, { query: { _id: message.mediaId } })
@@ -654,28 +714,33 @@ export function setReadCurrentChat ({ state, commit, dispatch }, data) {
   })
 }
 
-export async function uploadFile ({ commit, state, rootState }, { img, type }) {
+export async function uploadFile ({ commit, state, rootState }, { img, type, mediaType }) {
   console.log('start uplaod ', img)
-  const fileCompress = await new Promise((resolve, reject) => {
-    let options = {}
-    options = {
-      uri: img,
-      folderName: 'compressx',
-      quality: 90,
-      width: 600,
-      height: 600,
-      base64: false,
-      fit: false
-    }
-    window.ImageResizer.resize(options,
-      function (image) {
-        console.log('file compress untuk upload: ', image)
-        resolve(image)
-      }, function (e) {
-        console.log('error compress untuk upload', e)
-        reject(e)
-      })
-  })
+  let fileCompress = ''
+  if (mediaType === '1' || mediaType === 1) {
+    fileCompress = await new Promise((resolve, reject) => {
+      let options = {}
+      options = {
+        uri: img,
+        folderName: 'compressx',
+        quality: 90,
+        width: 600,
+        height: 600,
+        base64: false,
+        fit: false
+      }
+      window.ImageResizer.resize(options,
+        function (image) {
+          console.log('file compress untuk upload: ', image)
+          resolve(image)
+        }, function (e) {
+          console.log('error compress untuk upload', e)
+          reject(e)
+        })
+    })
+  } else {
+    fileCompress = img
+  }
   console.log('file comprese upload', img, type)
   return await new Promise((resolve, reject) => {
     var fd = new FormData()
