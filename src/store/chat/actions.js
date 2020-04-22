@@ -228,6 +228,7 @@ export async function setReceive ({ dispatch }, id) {
 }
 
 export async function sendReadStatus ({ state }, { uids, to, status }) {
+  console.log('send read status : ', uids, to, status)
   await this._vm.$appFeathers.service('readevent').create({
     uids: uids,
     to: to,
@@ -676,7 +677,7 @@ export function setReadCurrentChat ({ state, commit, dispatch }, data) {
     // console.log('setReadCurrentChat 1')
     db.transaction(function (tx) {
       console.log('setReadCurrentChat 2')
-      tx.executeSql('SELECT * FROM message WHERE convid=? and status=? and fromid<>? ORDER BY createdAt', [state.currentUserId, '2', state.user._id], (tx, rs) => {
+      tx.executeSql('SELECT * FROM message WHERE convid=? and status=? and fromid<>? ORDER BY createdAt', [state.currentUserId, 2, state.user._id], (tx, rs) => {
         console.log('total message  xxx', rs)
         let selects = rs.rows._array
         if (!selects) {

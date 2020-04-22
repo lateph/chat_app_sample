@@ -60,19 +60,19 @@
               v-if="message.fromid == $store.state.chat.user._id"
             >
               <div
-                class="bg-green-2 q-pa-xs"
-                style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden"
+                class="bg-green-2 q-pa-xs flex"
+                style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;"
               >
                 <img :src="message.localFile" style="max-height: 300px;max-width: 100%" v-if="message.mediaType == 1" v-on:click="openFile(message.localFile)">
                 <q-btn unelevated color="green-4" class="q-pa-xs " style="width: 250px;border-radius:6px" v-if="message.mediaType == 2 || message.mediaType == 3" @click="openFile(JSON.parse(message.mediaId).file)">
                   {{ JSON.parse(message.mediaId).name }}
                 </q-btn>
                 <!-- prettier-ignore -->
-                <div class="chatBubble">{{ message.message}}<span class="text-blue-2" style="margin-left:50px;">|</span></div>
+                <div class="chatBubble">{{ message.message}}<span class="text-blue-2" style="margin-left:30px;">|</span></div>
 
                 <div
-                  class="row justify-end full-width"
-                  style="font-size: 10px; margin-top:-15px"
+                  class="row self-end q-pt-xs"
+                  style="font-size: 10px;margin-left: auto"
                 >
                   <div class="row justify-center">
                     <div class="row items-center">
@@ -93,12 +93,12 @@
 
             <!-- him -->
             <div
-              class="row justify-start full-width q-py-xs"
+              class="row justify-between full-width q-py-xs"
               v-if="message.fromid != $store.state.chat.user._id"
             >
               <div
-                class="bg-grey-3 q-pa-xs"
-                style="max-width:80%; min-width:50px; border-radius:6px;"
+                class="bg-grey-3 q-pa-xs flex justify-between"
+                style="max-width:80%; min-width:30px; border-radius:6px;"
               >
                 <!-- image me chat -->
                 <div v-if="message.mediaType == 1">
@@ -127,11 +127,11 @@
                 </div>
 
                 <!-- prettier-ignore -->
-                <div class="chatBubble">{{ message.message}}<span class="text-grey-3" style="margin-left:35px;">|</span></div>
+                <div class="chatBubble self-start">{{ message.message}}<span class="text-grey-3" style="margin-left:35px;">|</span></div>
 
                 <div
-                  class="row justify-end full-width"
-                  style="font-size: 10px; margin-top:-15px"
+                  class="row justify-end q-pt-xs"
+                  style="font-size: 10px;margin-left: auto"
                 >
                   <div>{{ message.createdAt  | moment("from", "now") }}</div>
                 </div>
@@ -219,11 +219,11 @@ export default {
       eachLoad: 5
     }
   },
-  // beforeRouteLeave (to, from, next) {
-  //   this.unwatch()
-  //   // this.$store.dispatch('chat/removeCurrent')
-  //   next()
-  // },
+  beforeRouteLeave (to, from, next) {
+    // this.unwatch()
+    this.$store.dispatch('chat/removeCurrent')
+    next()
+  },
   mounted () {
     console.log('scroll area', this.$refs.scrollArea.scrollPosition)
     this.$store.dispatch('chat/setCurrent', this.$router.currentRoute.params.id)
@@ -606,6 +606,10 @@ export default {
       this.$store.dispatch('chat/sendPendingChat')
 
       this.message = ''
+
+      this.postCustoms('untyping')
+
+      this.showSendBut = false
     },
     async postCustoms (evt) {
       const obj = {
