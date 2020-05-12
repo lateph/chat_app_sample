@@ -21,7 +21,7 @@
               </q-card-section>
               <q-card-section>
                 <q-form class="q-px-sm q-pt-xl q-pb-lg">
-                  <q-input square clearable v-model="name" type="text" label="Name">
+                  <q-input square clearable v-model="nameId" type="text" label="Name">
                     <template v-slot:prepend>
                       <q-icon name="people" />
                     </template>
@@ -49,7 +49,7 @@
                       </q-item>
                     </template>
                   </q-select>
-                  <q-input square clearable v-model="phone" type="number" :prefix="cCode">
+                  <q-input square clearable v-model="phoneNumber" type="number" :prefix="cCode">
                     <template v-slot:prepend>
                       <q-icon name="call" />
                     </template>
@@ -108,9 +108,9 @@ export default {
   data: function () {
     return {
       email: '',
-      name: '',
+      nameId: '',
       password: '',
-      phone: '',
+      phoneNumber: '',
       country: otps[0],
       options: otps
     }
@@ -126,8 +126,8 @@ export default {
       this.$store.dispatch('chat/doSignup', {
         email: this.email,
         password: this.password,
-        name: this.name,
-        phone: this.country.code + this.phone,
+        nameId: this.nameId,
+        phoneNumber: this.country.code + this.phoneNumber,
         country: this.country.value
       }).then(data => {
         console.log(data)

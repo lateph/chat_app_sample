@@ -1,7 +1,7 @@
 <template>
   <q-layout>
     <q-header>
-      <q-toolbar>
+      <q-toolbar  v-if="!anySelected" >
         <q-btn flat dense icon="arrow_back_ios" @click="$router.go(-1)" />
 
         <div class="row items-center justify-between full-width">
@@ -24,7 +24,21 @@
             </div>
           </div>
           <div>
+            <q-btn flat dense icon="more_vert" v-if="anySelected" />
             <q-btn flat dense icon="more_vert" @click="$router.go(-1)" />
+          </div>
+        </div>
+
+      </q-toolbar>
+      <q-toolbar  v-if="anySelected" >
+        <q-btn flat dense icon="arrow_back_ios" @click="clearSelected()" />
+
+        <div class="row items-center justify-between full-width">
+          <div class="row items-center ">
+            {{countSelected}}
+          </div>
+          <div>
+            <q-btn flat dense icon="delete" v-if="anySelected" @click="deleteChat()"/>
           </div>
         </div>
 
@@ -32,11 +46,11 @@
     </q-header>
 
     <q-page-container>
-      <q-page  class="flex q-pa-sm" id="scroll-target-id" style="overflow: scroll">
+      <q-page  class="flex" id="scroll-target-id" style="overflow: scroll">
         <q-scroll-area
           ref="scrollArea"
           scroll-target="#scroll-target-id"
-          class="full-width q-px-sm"
+          class="full-width"
           @scroll="onScrollSecond"
         >
           <!-- <q-chat-message
@@ -56,19 +70,23 @@
           >
             <!-- me -->
             <div
-              class="row justify-end full-width q-py-xs"
+              class="row justify-end full-width q-py-xs relative-position"
               v-if="message.fromid == $store.state.chat.user._id"
             >
+              <div class="bg-blue-4 absolute-full" style="opacity: 0.3" v-if="message.selected" v-on:click="handleHold2(message)"></div>
               <div
-                class="bg-green-2 q-pa-xs flex"
+                class="bg-green-2 q-pa-xs flex q-mr-xs"
                 style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;"
+                v-touch-hold="handleHold(message)"
+                v-on:click="handleHold2(message)"
               >
                 <img :src="message.localFile" style="max-height: 300px;max-width: 100%" v-if="message.mediaType == 1" v-on:click="openFile(message.localFile)">
                 <q-btn unelevated color="green-4" class="q-pa-xs " style="width: 250px;border-radius:6px" v-if="message.mediaType == 2 || message.mediaType == 3" @click="openFile(JSON.parse(message.mediaId).file)">
                   {{ JSON.parse(message.mediaId).name }}
                 </q-btn>
                 <!-- prettier-ignore -->
-                <div class="chatBubble">{{ message.message}}<span class="text-blue-2" style="margin-left:30px;">|</span></div>
+                <div class="chatBubble" v-if="message.status != 4 && message.status != 5">{{ message.message }}<span class="text-blue-2" style="margin-left:30px;">|</span></div>
+                <div class="chatBubble deleted" v-if="message.status == 4 || message.status == 5">This Message Was Deleted<span class="text-blue-2" style="margin-left:30px;">|</span></div>
 
                 <div
                   class="row self-end q-pt-xs"
@@ -93,12 +111,15 @@
 
             <!-- him -->
             <div
-              class="row justify-between full-width q-py-xs"
+              class="row justify-between full-width q-py-xs relative-position"
               v-if="message.fromid != $store.state.chat.user._id"
             >
+              <div class="bg-blue-4 absolute-full" style="opacity: 0.3" v-if="message.selected" v-on:click="handleHold2(message)"></div>
               <div
-                class="bg-grey-3 q-pa-xs flex justify-between"
+                class="bg-grey-3 q-pa-xs flex justify-between  q-ml-xs"
                 style="max-width:80%; min-width:30px; border-radius:6px;"
+                v-touch-hold="handleHold(message)"
+                v-on:click="handleHold2(message)"
               >
                 <!-- image me chat -->
                 <div v-if="message.mediaType == 1">
@@ -127,7 +148,8 @@
                 </div>
 
                 <!-- prettier-ignore -->
-                <div class="chatBubble self-start">{{ message.message}}<span class="text-grey-3" style="margin-left:35px;">|</span></div>
+                <div class="chatBubble" v-if="message.status != 4 && message.status != 5">{{ message.message }}<span class="text-blue-2" style="margin-left:30px;">|</span></div>
+                <div class="chatBubble deleted" v-if="message.status == 4 || message.status == 5">This Message Was Deleted<span class="text-blue-2" style="margin-left:30px;">|</span></div>
 
                 <div
                   class="row justify-end q-pt-xs"
@@ -190,12 +212,28 @@
 <script>
 // import { scroll } from 'quasar'
 // const { getScrollTarget, setScrollPosition } = scroll
+var _ = require('lodash')
 import { mapState } from 'vuex'
+import { Dialog } from 'quasar'
 // import { scroll } from 'quasar'
 // const { getScrollHeight } = scroll
 export default {
   // name: 'PageName',
-  computed: mapState('chat', ['messages']),
+  computed: {
+    ...mapState('chat', ['messages']),
+    anySelected: {
+      get () {
+        return _.findIndex(this.$store.getters['chat/messages'], (m) => {
+          return m.selected === true
+        }) > -1
+      }
+    },
+    countSelected: {
+      get () {
+        return _.filter(this.$store.getters['chat/messages'], { selected: true }).length
+      }
+    }
+  },
   watch: {
     // messages (newValue, oldValue) {
     //   console.log(`Updating from ${oldValue.length} to ${newValue.length}`)
@@ -235,6 +273,57 @@ export default {
     console.log(this.$socket)
   },
   methods: {
+    async deleteChat () {
+      console.log('delete chat')
+      Dialog.create({
+        title: 'Delete Message ?',
+        options: {
+          type: 'radio',
+          model: 'opt1',
+          // inline: true
+          items: [
+            { label: 'Delete For Me', value: 'opt1', color: 'secondary' },
+            { label: 'Delete For Everyone', value: 'opt2' }
+          ]
+        },
+        cancel: true,
+        persistent: true
+      }).onOk(data => {
+        console.log('>>>> OK, received', data)
+        let mode = true
+        if (data === 'opt1') {
+          mode = true
+        } else {
+          mode = false
+          // alert('not yet')
+          // return
+        }
+        this.$store.dispatch('chat/deleteSelected', mode).then(() => {
+          this.clearSelected()
+        })
+      })
+    },
+    handleHold (index) {
+      const _t = this
+      return function (props) {
+        console.log(index, props)
+        console.log(_t)
+        _t.$store.dispatch('chat/switchSelected', index._id)
+      }
+    },
+    handleHold2 (index) {
+      console.log('click')
+      const a = _.find(this.$store.getters['chat/messages'], (m) => {
+        return m.selected === true
+      })
+      if (a) {
+        console.log('siwtch')
+        this.$store.dispatch('chat/switchSelected', index._id)
+      }
+    },
+    clearSelected () {
+      this.$store.commit('chat/clearSelected')
+    },
     onScrollSecond () {
       if (this.$refs.scrollArea.scrollPosition === 0 && this.fistDone && this.loadNotDone && !this.fetching) {
         const heightBefore = this.$refs.scrollArea.scrollPosition
@@ -668,5 +757,10 @@ export default {
   word-wrap: break-word;
   hyphens: auto;
   max-width: 100%;
+}
+
+.deleted {
+  font-style: italic;
+  color: grey;
 }
 </style>

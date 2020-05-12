@@ -8,12 +8,12 @@ import { LocalStorage } from 'quasar'
 import { jwtDecode } from 'jwt-js-decode'
 
 // signup action
-export async function doSignup ({ state }, { email, password, name, country, phone }) {
+export async function doSignup ({ state }, { email, password, nameId, country, phoneNumber }) {
   return this._vm.$appFeathers.service('users').create({
     email,
     password,
-    name,
-    phone,
+    nameId,
+    phoneNumber,
     country
   })
 }
@@ -52,7 +52,11 @@ export async function doLoginJwt ({ state, dispatch, commit }, { jwt }) {
     accessToken: jwt,
     strategy: 'jwt'
   })
+
   commit('user', message.user)
+  await dispatch('openDB')
+  await dispatch('loadKey')
+  await dispatch('loadLocalContact')
   dispatch('syncChat')
   dispatch('updateToken', message.user._id)
   LocalStorage.set('jwt', message.accessToken)
@@ -65,7 +69,7 @@ export async function localDataLoad ({ state, dispatch, commit }, { jwt }) {
   // @Todo check jwt to match
   commit('user', {
     _id: decode.payload.sub,
-    phone: decode.payload.phone
+    phoneNumber: decode.payload.phoneNumber
   })
   console.log('user decodde', decode)
   dispatch('openDB')
@@ -95,6 +99,7 @@ export function updateToken ({ state, commit }, userId) {
     }
     const push = window.PushNotification.init({
       android: {
+        forceShow: 'true'
       }
     })
 
@@ -302,8 +307,27 @@ export function loadConv ({ state, commit, dispatch }) {
   4. receive all readevent when we offline
 */
 export async function syncChat ({ state, commit, dispatch }) {
-  const data = await this._vm.$appFeathers.service('messages').find({ query: { $limit: 1000, $sort: { createdAt: 1 }, to: { $in: [state.user._id] } } })
+  const deleteMessage = await dispatch('getUnsentDeleteMessage')
+  console.log('message to delete', deleteMessage)
+  _.forEach(deleteMessage, async message => {
+    const to = JSON.parse(message.toids)
+    if (to.length > 0) {
+      await this._vm.$appFeathers.service('readevent').create({
+        uids: [message._id],
+        to: to[0],
+        from: state.user._id,
+        status: 5
+      })
+      await dispatch('deleteMessageStatus', {
+        status: 5,
+        uid: message._id
+      })
+      // this._vm.$appFeathers.service('messages').remove(r._id)
+    }
+  })
 
+  const data = await this._vm.$appFeathers.service('messages').find({ query: { $limit: 1000, $sort: { createdAt: 1 }, to: { $in: [state.user._id] } } })
+  console.log('new chat total', data.data.length)
   const p = _.partition(data.data, (o) => { return o.from })
   _.forEach(p, async messages => {
     if (messages.length > 0) {
@@ -316,11 +340,17 @@ export async function syncChat ({ state, commit, dispatch }) {
     }
   })
 
-  _.forEach(data.data, (r) => {
-    dispatch('addMessage', { ...r, status: 2 }).then(() => {
+  for (let index = 0; index < data.data.length; index++) {
+    const r = data.data[index]
+    try {
+      console.log('addmessage 1', r)
+      await dispatch('addMessage', { ...r, status: 2 })
+      console.log('addmessage 2')
       dispatch('setReceive', r)
-    })
-  })
+    } catch (error) {
+      console.log('add message error', error)
+    }
+  }
 
   const dataReadEvents = await this._vm.$appFeathers.service('readevent').find({ query: { $limit: 99999, $sort: { createdAt: 1 }, to: state.user._id } })
   _.forEach(dataReadEvents.data, (r) => {
@@ -375,30 +405,40 @@ export async function syncContact ({ state, commit, dispatch }) {
     })
   }
 
-  const index = phoneNumbers.indexOf(state.user.phone)
+  console.log('%c-user', 'color: blue;', state.user.phoneNumber)
+  const index = phoneNumbers.indexOf(state.user.phoneNumber)
   if (index > -1) {
     phoneNumbers.splice(index, 1)
   }
 
+  const chunkphoneNumbers = _.chunk(phoneNumbers, 30)
+  let contacts = []
+  for (const chunkphoneNumber of chunkphoneNumbers) {
+    // const c = await this._vm.$chatAxios.get('/users', {
+    //   phoneNumbers: chunkphoneNumber
+    // })
+    const c = await this._vm.$appFeathers.service('users').find({ query: { $limit: 99999, phoneNumber: chunkphoneNumber } })
+    console.log(c)
+    const usersFound = c.data
+    contacts = [...contacts, ...usersFound]
+  }
+
+  console.log('hasil contact', contacts)
+
   return await new Promise((resolve, reject) => {
     // console.log(phoneNumbers)
-    console.log('%c-phoneNumbers', 'color: yellow;', JSON.stringify(phoneNumbers))
+    console.log('%c-contacts', 'color: blue;', JSON.stringify(contacts))
 
-    this._vm.$appFeathers.service('users').find({ query: { $limit: 99999, phone: phoneNumbers } }).then((data) => {
-      console.log('contact found', data.data)
-      db.transaction((tx) => {
-        tx.executeSql('DELETE FROM contact', [])
-        _.forEach(data.data, (row) => {
-          tx.executeSql('INSERT INTO contact VALUES (?,?,?,?,?,?)', [row._id, row.email, row.name, row.phone, row.country, row.publicKey])
-        })
-      }, function (error) {
-        console.log('Transaction ERROR: ' + error.message)
-        reject(error)
-      }, function () {
-        resolve(true)
+    db.transaction((tx) => {
+      tx.executeSql('DELETE FROM contact', [])
+      _.forEach(contacts, (row) => {
+        tx.executeSql('INSERT INTO contact VALUES (?,?,?,?,?,?,?)', [row._id, row.email, row.nameId, row.phoneNumber, row.country, row.publicKey, row.imgProfile])
       })
-    }).catch((e) => {
-      reject(e)
+    }, function (error) {
+      console.log('Transaction ERROR: ' + error.message)
+      reject(error)
+    }, function () {
+      resolve(true)
     })
   })
 }
@@ -406,21 +446,21 @@ export async function syncContact ({ state, commit, dispatch }) {
 export function openDB ({ state }) {
   console.log(window.sqlitePlugin)
   if (window.sqlitePlugin) {
-    db = window.sqlitePlugin.openDatabase({ name: 'chat09' + state.user._id + '.db', location: 'default' }, function (db) {}, function (error) { console.log('Open database ERROR: ' + JSON.stringify(error)) })
+    db = window.sqlitePlugin.openDatabase({ name: 'chat11' + state.user._id + '.db', location: 'default' }, function (db) {}, function (error) { console.log('Open database ERROR: ' + JSON.stringify(error)) })
     console.log('DB: SQLite')
   } else {
-    db = window.openDatabase('chat09' + state.user._id, '0.1', 'My list', 200000)
+    db = window.openDatabase('chat11' + state.user._id, '0.1', 'My list', 200000)
     console.log('DB: WebSQL')
   }
   this._vm.$db = db
   db.transaction((tx) => {
     tx.executeSql('CREATE TABLE IF NOT EXISTS message (_id, message, convid, fromid, toids, createdAt, updatedAt ,status, recipientStatus, mediaId, mediaType, localFile, thumb)')
-    tx.executeSql('CREATE TABLE IF NOT EXISTS conv (message, convid, name, phone, unreadCount INTEGER DEFAULT 0, updatedAt)')
-    tx.executeSql('CREATE TABLE IF NOT EXISTS contact (_id, email, name, phone, country, publickey)')
+    tx.executeSql('CREATE TABLE IF NOT EXISTS conv (message, convid, name, phoneNumber, unreadCount INTEGER DEFAULT 0, updatedAt, imgProfile)')
+    tx.executeSql('CREATE TABLE IF NOT EXISTS contact (_id, email, name, phoneNumber, country, publickey, imgProfile)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS setting (key, value)')
     tx.executeSql('CREATE INDEX IF NOT EXISTS convididx ON message (convid)')
     tx.executeSql('CREATE INDEX IF NOT EXISTS _ididx ON message (_id)')
-    tx.executeSql('CREATE UNIQUE INDEX IF NOT EXISTS phone ON contact (phone)')
+    tx.executeSql('CREATE UNIQUE INDEX IF NOT EXISTS phoneNumber ON contact (phoneNumber)')
   }, (error) => {
     console.log('Transaction ERROR: ' + error.message)
   }, () => {
@@ -433,6 +473,7 @@ export async function findContactDetail ({ state, dispatch, commit }, id) {
   if (!c) {
     const data = await this._vm.$appFeathers.service('users').find({ query: { _id: id } })
     c = data.data[0]
+    c.name = c.nameId
     console.log('oke banget ', c, data)
     await dispatch('insertContact', c)
     commit('insertContact', c)
@@ -444,19 +485,24 @@ export async function addMessage ({ state, commit, dispatch }, data) {
   // console.log('saving message :', data)
   // get lawan chat
   // @todo support group chat
+  console.log('addMessage mulai', data.from, state.user._id)
+
   let id = ''
   let recipientStatus = ''
   let dText = ''
   if (data.from === state.user._id) {
+    console.log('addMessage sama')
     id = data.to[0]
     recipientStatus = JSON.stringify(data.recipientStatus)
   } else {
+    console.log('decryptChatMessage mulai')
     id = data.from
     dText = await dispatch('decryptChatMessage', {
       text: data.text,
       privateKey: state.privateKey
     })
   }
+  console.log('decryptChatMessage done')
 
   // update conv
   // this will make list chat have last message inserted
@@ -467,16 +513,19 @@ export async function addMessage ({ state, commit, dispatch }, data) {
       message: dText,
       convid: id,
       name: contactDetail.name,
-      phone: contactDetail.phone,
-      updatedAt: data.createdAt
+      phoneNumber: contactDetail.phoneNumber,
+      updatedAt: data.createdAt,
+      imgProfile: data.imgProfile
     })
   }
+  console.log('update conv done')
 
   // check if data with id exists
   // if own chat it will be exists with same id since save to db first then send
   // reason is to support send message while offline
   const dataExists = await dispatch('getMessageByUID', data.uid)
   const to = JSON.stringify(data.to)
+  console.log('check done')
 
   let rowId = ''
   if (dataExists) {
@@ -549,6 +598,45 @@ export async function addMessage ({ state, commit, dispatch }, data) {
       })
     }
   }
+}
+
+export async function switchSelected ({ commit }, uid) {
+  commit('switchSelected', {
+    _id: uid
+    // selected: true
+  })
+}
+
+export async function deleteSelected ({ commit, state, dispatch }, deleteMeOnly) {
+  const list = _.filter(state.dataMessage, { selected: true })
+
+  for (let index = 0; index < list.length; index++) {
+    let status = 5
+    const message = list[index]
+    if (message.fromid === state.user._id) {
+      if (deleteMeOnly) {
+        console.log('delete langsung hapus ', message)
+        await dispatch('deleteMessageStatus', {
+          status: status,
+          uid: message._id
+        })
+      } else {
+        console.log('delete with status 4 ajakne')
+        status = 4
+        await dispatch('deleteMessageStatus', {
+          status: status,
+          uid: message._id
+        })
+      }
+    } else {
+      await dispatch('deleteMessageStatus', {
+        status: status,
+        uid: message._id
+      })
+    }
+    commit('updateMessage', { ...message, status: status })
+  }
+  dispatch('syncChat')
 }
 
 export async function downloadMedia ({ state, commit, dispatch }, uid) {
@@ -641,35 +729,48 @@ export async function downloadMedia ({ state, commit, dispatch }, uid) {
 
 // check read message on read event
 export function readMessage ({ state, commit, dispatch }, data) {
-  db.transaction((tx) => {
+  console.log('readevent', data)
+  if (data.status === 5 || data.status === '5') {
     _.forEach(data.uids, (uid) => {
-      tx.executeSql('SELECT * FROM message WHERE _id = ?', [uid], (tx, messageResult) => {
-        let selects = messageResult.rows._array
-        if (!selects) {
-          selects = messageResult.rows
-        }
-        if (selects.length > 0) {
-          const message = selects[0]
-          var newRecipientStatus = JSON.parse(message.recipientStatus)
-
-          var match = _.find(newRecipientStatus, { _id: data.from })
-          var index = _.findIndex(newRecipientStatus, { _id: data.from })
-          newRecipientStatus.splice(index, 1, { ...match, status: match.status > data.status ? match.status : data.status })
-
-          const status = _.min(newRecipientStatus, o => o.status).status
-          tx.executeSql('UPDATE message SET status = ?, recipientStatus = ? WHERE _id = ?', [status, JSON.stringify(newRecipientStatus), uid], (tx, messageResult) => {
-            if (state.currentUserId === data.from) {
-              commit('updateMessage', { ...message, recipientStatus: newRecipientStatus, status: status })
-            }
-          })
-        }
+      dispatch('deleteMessageStatus', {
+        status: 5,
+        uid: uid
       })
+      // if (state.currentUserId === data.from) {
+      commit('updateMessage', { _id: uid, status: 5 })
+      // }
     })
-  }, (error) => {
-    console.log('Transaction ERROR: ' + error.message)
-  }, () => {
-    console.log('message saved OK')
-  })
+  } else {
+    db.transaction((tx) => {
+      _.forEach(data.uids, (uid) => {
+        tx.executeSql('SELECT * FROM message WHERE _id = ?', [uid], (tx, messageResult) => {
+          let selects = messageResult.rows._array
+          if (!selects) {
+            selects = messageResult.rows
+          }
+          if (selects.length > 0) {
+            const message = selects[0]
+            var newRecipientStatus = JSON.parse(message.recipientStatus)
+
+            var match = _.find(newRecipientStatus, { _id: data.from })
+            var index = _.findIndex(newRecipientStatus, { _id: data.from })
+            newRecipientStatus.splice(index, 1, { ...match, status: match.status > data.status ? match.status : data.status })
+
+            const status = _.min(newRecipientStatus, o => o.status).status
+            tx.executeSql('UPDATE message SET status = ?, recipientStatus = ? WHERE _id = ?', [status, JSON.stringify(newRecipientStatus), uid], (tx, messageResult) => {
+              if (state.currentUserId === data.from) {
+                commit('updateMessage', { ...message, recipientStatus: newRecipientStatus, status: status })
+              }
+            })
+          }
+        })
+      })
+    }, (error) => {
+      console.log('Transaction ERROR: ' + error.message)
+    }, () => {
+      console.log('message saved OK')
+    })
+  }
 }
 
 export function setReadCurrentChat ({ state, commit, dispatch }, data) {

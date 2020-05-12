@@ -41,7 +41,7 @@ export function insertMessage ({ state }, data) {
 export function insertContact ({ state }, row) {
   return new Promise((resolve, reject) => {
     this._vm.$db.transaction(async (tx) => {
-      tx.executeSql('INSERT INTO contact VALUES (?,?,?,?,?,?)', [row._id, row.email, row.name, row.phone, row.country, row.publicKey], (tx, result) => {
+      tx.executeSql('INSERT INTO contact VALUES (?,?,?,?,?,?,?)', [row._id, row.email, row.name, row.phoneNumber, row.country, row.publicKey, row.imgProfile], (tx, result) => {
         resolve(result)
       })
     }, (e) => {
@@ -59,6 +59,44 @@ export function updateMessageStatus ({ state }, data) {
       tx.executeSql('UPDATE message SET status = ?, recipientStatus = ? WHERE _id = ? and status < ?', [
         data.status,
         data.recipientStatus,
+        data.uid,
+        data.status
+      ], (tx, result) => {
+        resolve(result)
+      })
+    }, (e) => {
+      console.log(e)
+      reject(false)
+    }, () => {
+      // reject(false)
+    })
+  })
+}
+
+export function getUnsentDeleteMessage ({ state, commit, dispatch }) {
+  return new Promise((resolve, reject) => {
+    this._vm.$db.transaction(async (tx) => {
+      tx.executeSql('SELECT * FROM message WHERE status = ?', [4], (tx, messageResult) => {
+        let selects = messageResult.rows._array
+        if (!selects) {
+          selects = messageResult.rows
+        }
+        resolve(selects)
+      })
+    }, () => {
+      reject(false)
+    }, () => {
+      // reject(false)
+    })
+  })
+}
+
+export function deleteMessageStatus ({ state }, data) {
+  return new Promise((resolve, reject) => {
+    this._vm.$db.transaction(async (tx) => {
+      tx.executeSql('UPDATE message SET status = ?, message = ? WHERE _id = ? and status < ?', [
+        data.status,
+        '',
         data.uid,
         data.status
       ], (tx, result) => {
@@ -98,12 +136,12 @@ export function updateConv ({ state, commit, dispatch }, data) {
       if (selects.length > 0) {
         const conv = selects[0]
         // console.log('mulai update conv')
-        tx.executeSql('UPDATE conv SET message = ?, updatedAt = ?, unreadCount = ?, name = ?, phone = ?  WHERE convid = ?', [data.message, data.updatedAt, state.currentUserId === data.convid ? 0 : conv.unreadCount + 1, data.name, data.phone, data.convid], (tx, messageResult) => {
+        tx.executeSql('UPDATE conv SET message = ?, updatedAt = ?, unreadCount = ?, name = ?, phoneNumber = ?  WHERE convid = ?', [data.message, data.updatedAt, state.currentUserId === data.convid ? 0 : conv.unreadCount + 1, data.name, data.phoneNumber, data.convid], (tx, messageResult) => {
           dispatch('loadConv')
         })
       } else {
         console.log('mulai insert conv')
-        tx.executeSql('INSERT INTO conv VALUES(?,?,?,?,?,?)', [data.message, data.convid, data.name, data.phone, state.currentUserId === data.convid ? 0 : 1, data.updatedAt], (tx, messageResult) => {
+        tx.executeSql('INSERT INTO conv VALUES(?,?,?,?,?,?,?)', [data.message, data.convid, data.name, data.phoneNumber, state.currentUserId === data.convid ? 0 : 1, data.updatedAt, data.imgProfile], (tx, messageResult) => {
           dispatch('loadConv')
         })
       }
@@ -158,7 +196,8 @@ export function saveChat ({ state, commit, dispatch }, { text, mediaId, mediaTyp
           message: text,
           convid: state.currentUserId,
           name: c.name,
-          phone: c.phone,
+          phoneNumber: c.phoneNumber,
+          imgProfile: c.imgProfile,
           updatedAt: new Date().toISOString()
         }).then(() => {
           console.log('insert ok 3')
@@ -177,7 +216,7 @@ export function loadLocalContact ({ state, commit }) {
   console.log('load local contact')
   return new Promise((resolve, reject) => {
     this._vm.$db.transaction(function (tx) {
-      tx.executeSql('SELECT rowid, _id, email, name, phone, country FROM contact WHERE publickey != ?', [''], (tx, rs) => {
+      tx.executeSql('SELECT rowid, _id, email, name, phoneNumber, country, imgProfile FROM contact WHERE publickey != ?', [''], (tx, rs) => {
         let selects = rs.rows._array
         if (!selects) {
           selects = rs.rows

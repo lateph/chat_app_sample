@@ -52,7 +52,7 @@
         </q-page-sticky>
       </q-page>
       <q-page padding v-if="contacts.length > 0 && convs.length == 0" class="flex flex-center">
-        <q-btn unelevated rounded color="primary" label="Start Message"  icon="question_answer" v-if="!loading" @click="startMessage"/>
+        <q-btn unelevated rounded color="primary" label="Start Message"  icon="question_answer" v-if="!loading" @click="$router.push('/createChat')"/>
       </q-page>
       <q-page padding v-if="contacts.length == 0" class="flex flex-center">
         <q-btn unelevated rounded color="primary" label="Sync Contact"  icon="autorenew" v-if="!loading" @click="syncMain"/>

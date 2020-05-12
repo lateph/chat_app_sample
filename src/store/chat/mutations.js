@@ -42,6 +42,24 @@ export function updateMessage (state, data) {
   }
 }
 
+export function switchSelected (state, data) {
+  var index = _.findIndex(state.dataMessage, { _id: data._id })
+  console.log(state.dataMessage[index], data)
+  if (index > -1) {
+    const _data = {
+      ...state.dataMessage[index],
+      selected: !state.dataMessage[index].selected
+    }
+    state.dataMessage.splice(index, 1, _data)
+  }
+}
+
+export function clearSelected (state) {
+  _.each(state.dataMessage, (e) => {
+    e.selected = false
+  })
+}
+
 export function addMessage (state, data) {
   state.dataMessage = [...state.dataMessage, convert(state, data)]
 }
