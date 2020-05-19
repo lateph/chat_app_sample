@@ -57,6 +57,7 @@ export async function doLoginJwt ({ state, dispatch, commit }, { jwt }) {
   await dispatch('openDB')
   await dispatch('loadKey')
   await dispatch('loadLocalContact')
+  await dispatch('loadConv')
   dispatch('syncChat')
   dispatch('updateToken', message.user._id)
   LocalStorage.set('jwt', message.accessToken)
@@ -129,7 +130,7 @@ export function updateToken ({ state, commit }, userId) {
   })
 }
 
-export async function sendChat ({ state, dispatch, getters }, { text, localFile, uid, to, mediaType, mediaId, createdAt, updatedAt }) {
+export async function sendChat ({ state, dispatch, getters }, { text, localFile, uid, to, mediaType, mediaId, createdAt, updatedAt, groupId, convid }) {
   let _mediaId = ''
   let thumb = ''
   if (mediaType === 1 || mediaType === '1') {
@@ -172,7 +173,13 @@ export async function sendChat ({ state, dispatch, getters }, { text, localFile,
 
   console.log('pubkey', getters.currentUser)
   // @todo group need change
-  const publicKey = await dispatch('getPublicKey', state.currentUserId)
+  let publicKey = ''
+  console.log(groupId, convid)
+  if (groupId) {
+    publicKey = await dispatch('getGroupPublicKey', convid)
+  } else {
+    publicKey = await dispatch('getPublicKey', convid)
+  }
 
   console.log('pubkey', publicKey)
 
@@ -193,6 +200,7 @@ export async function sendChat ({ state, dispatch, getters }, { text, localFile,
     mediaType,
     createdAt: createdAt,
     updatedAt: updatedAt,
+    groupId: groupId,
     thumb
   })
 
@@ -210,12 +218,14 @@ export async function sendPendingChat ({ dispatch }) {
         _.forEach(selects, (r) => {
           dispatch('sendChat', {
             text: r.message,
+            convid: r.convid,
             localFile: r.localFile,
             mediaType: r.mediaType,
             mediaId: r.mediaId,
             createdAt: r.createdAt,
             updatedAt: r.updatedAt,
             uid: r._id,
+            groupId: r.groupId,
             to: JSON.parse(r.toids)
           })
         })
@@ -228,8 +238,16 @@ export async function sendPendingChat ({ dispatch }) {
   })
 }
 
-export async function setReceive ({ dispatch }, id) {
-  return await this._vm.$appFeathers.service('messages').remove(id)
+export async function setReceive ({ state }, id) {
+  console.log('id', id)
+  console.log('pull', state.user._id)
+  const m = await this._vm.$appFeathers.service('messages').patch(null, { $pull: { to: state.user._id } }, { query: { _id: id._id } })
+  // const m = await this._vm.$appFeathers.service('messages').patch(null, { to: to }, { query: { _id: id } })
+  console.log('m', m)
+  if (m[0].to.length === 0) {
+    console.log('remove', id._id)
+    await this._vm.$appFeathers.service('messages').remove(id._id)
+  }
 }
 
 export async function sendReadStatus ({ state }, { uids, to, status }) {
@@ -307,6 +325,7 @@ export function loadConv ({ state, commit, dispatch }) {
   4. receive all readevent when we offline
 */
 export async function syncChat ({ state, commit, dispatch }) {
+  await dispatch('syncGroup')
   const deleteMessage = await dispatch('getUnsentDeleteMessage')
   console.log('message to delete', deleteMessage)
   _.forEach(deleteMessage, async message => {
@@ -358,6 +377,24 @@ export async function syncChat ({ state, commit, dispatch }) {
     this._vm.$appFeathers.service('readevent').remove(r._id)
   })
 
+  return true
+}
+
+export async function syncGroup ({ state, commit, dispatch }) {
+  const data = await this._vm.$appFeathers.service('group').find({ query: { $limit: 1000, $sort: { createdAt: 1 }, members: { $in: [state.user._id] } } })
+  console.log('list group', data.data.length)
+
+  for (let index = 0; index < data.data.length; index++) {
+    const r = data.data[index]
+    try {
+      const c = _.find(state.convs, (e) => e.convid === r._id)
+      if (!c) {
+        dispatch('newGroup', r)
+      }
+    } catch (error) {
+      console.log('add message error', error)
+    }
+  }
   return true
 }
 
@@ -446,16 +483,16 @@ export async function syncContact ({ state, commit, dispatch }) {
 export function openDB ({ state }) {
   console.log(window.sqlitePlugin)
   if (window.sqlitePlugin) {
-    db = window.sqlitePlugin.openDatabase({ name: 'chat11' + state.user._id + '.db', location: 'default' }, function (db) {}, function (error) { console.log('Open database ERROR: ' + JSON.stringify(error)) })
+    db = window.sqlitePlugin.openDatabase({ name: 'chat12' + state.user._id + '.db', location: 'default' }, function (db) {}, function (error) { console.log('Open database ERROR: ' + JSON.stringify(error)) })
     console.log('DB: SQLite')
   } else {
-    db = window.openDatabase('chat11' + state.user._id, '0.1', 'My list', 200000)
+    db = window.openDatabase('chat12' + state.user._id, '0.1', 'My list', 200000)
     console.log('DB: WebSQL')
   }
   this._vm.$db = db
   db.transaction((tx) => {
-    tx.executeSql('CREATE TABLE IF NOT EXISTS message (_id, message, convid, fromid, toids, createdAt, updatedAt ,status, recipientStatus, mediaId, mediaType, localFile, thumb)')
-    tx.executeSql('CREATE TABLE IF NOT EXISTS conv (message, convid, name, phoneNumber, unreadCount INTEGER DEFAULT 0, updatedAt, imgProfile)')
+    tx.executeSql('CREATE TABLE IF NOT EXISTS message (_id, message, convid, fromid, toids, createdAt, updatedAt ,status, recipientStatus, mediaId, mediaType, localFile, thumb, groupId)')
+    tx.executeSql('CREATE TABLE IF NOT EXISTS conv (message, convid, name, phoneNumber, unreadCount INTEGER DEFAULT 0, updatedAt, imgProfile, isGroup, members, publicKey, privateKey)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS contact (_id, email, name, phoneNumber, country, publickey, imgProfile)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS setting (key, value)')
     tx.executeSql('CREATE INDEX IF NOT EXISTS convididx ON message (convid)')
@@ -472,7 +509,9 @@ export async function findContactDetail ({ state, dispatch, commit }, id) {
   let c = _.find(state.contacts, c => c._id === id)
   if (!c) {
     const data = await this._vm.$appFeathers.service('users').find({ query: { _id: id } })
+    const key = await this._vm.$appFeathers.service('userkeys').find({ query: { userId: data._id } })
     c = data.data[0]
+    c.publicKey = key.publicKey
     c.name = c.nameId
     console.log('oke banget ', c, data)
     await dispatch('insertContact', c)
@@ -481,39 +520,85 @@ export async function findContactDetail ({ state, dispatch, commit }, id) {
   return c
 }
 
+export async function createGroup ({ state, dispatch, commit }, data) {
+  return await this._vm.$appFeathers.service('group').create({
+    name: data.name,
+    image: data.image,
+    members: [..._.map(state.selectedCreateGroup, (u) => {
+      return u._id
+    }), state.user._id]
+  })
+}
+
+export async function newGroup ({ state, dispatch, commit }, group) {
+  await dispatch('updateConv', {
+    message: '',
+    convid: group._id,
+    name: group.name,
+    phoneNumber: '',
+    updatedAt: group.updatedAt,
+    imgProfile: group.image,
+    isGroup: true,
+    members: group.members,
+    publicKey: group.publicKey,
+    privateKey: group.privateKey
+  })
+  await dispatch('updateConvToZero', group._id)
+}
+
 export async function addMessage ({ state, commit, dispatch }, data) {
-  // console.log('saving message :', data)
+  console.log('saving message :', data)
   // get lawan chat
-  // @todo support group chat
-  console.log('addMessage mulai', data.from, state.user._id)
+  console.log('addMessage mulai', data)
 
   let id = ''
   let recipientStatus = ''
   let dText = ''
+
+  console.log('contactDetail', data)
+
   if (data.from === state.user._id) {
     console.log('addMessage sama')
-    id = data.to[0]
+    if (data.groupId) {
+      id = data.groupId
+    } else {
+      id = data.to[0]
+    }
     recipientStatus = JSON.stringify(data.recipientStatus)
   } else {
     console.log('decryptChatMessage mulai')
     id = data.from
+    let pvkey = ''
+    if (data.groupId) {
+      id = data.groupId
+      pvkey = await dispatch('getGroupPrivateKey', data.groupId)
+    } else {
+      pvkey = state.privateKey
+    }
     dText = await dispatch('decryptChatMessage', {
       text: data.text,
-      privateKey: state.privateKey
+      privateKey: pvkey
     })
   }
   console.log('decryptChatMessage done')
 
   // update conv
   // this will make list chat have last message inserted
-  const contactDetail = await dispatch('findContactDetail', id)
+  let contactDetail = {}
+  if (data.groupId) {
+    // id = data.groupId
+    contactDetail = await dispatch('getGroupData', id)
+  } else {
+    contactDetail = await dispatch('findContactDetail', id)
+  }
+  console.log('contactDetail', contactDetail)
 
   if (data.from !== state.user._id) {
     dispatch('updateConv', {
       message: dText,
       convid: id,
       name: contactDetail.name,
-      phoneNumber: contactDetail.phoneNumber,
+      phoneNumber: '',
       updatedAt: data.createdAt,
       imgProfile: data.imgProfile
     })
@@ -539,10 +624,10 @@ export async function addMessage ({ state, commit, dispatch }, data) {
     console.log('update status by addMessage ' + data.uid, resultUpdate)
   } else {
     console.log('insert message :', data)
-    const resultInsert = await dispatch('insertMessage', [data.uid, dText, id, data.from, to, data.createdAt, data.updatedAt, data.status, recipientStatus, data.mediaId, data.mediaType, '', data.thumb])
+    const resultInsert = await dispatch('insertMessage', [data.uid, dText, id, data.from, to, data.createdAt, data.updatedAt, data.status, recipientStatus, data.mediaId, data.mediaType, '', data.thumb, data.groupId])
     rowId = resultInsert.insertId
   }
-
+  // belum selesai untuk group
   // if user already in chat detail add message to list current chat
   if (id === state.currentUserId) {
     if (dataExists) {
@@ -558,10 +643,12 @@ export async function addMessage ({ state, commit, dispatch }, data) {
         status: data.status
       })
     } else {
+      console.log('add message data', data)
       commit('addMessage', {
         message: dText,
         rowid: rowId,
         _id: data.uid,
+        groupId: data.groupId,
         contact: id,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
@@ -645,7 +732,7 @@ export async function downloadMedia ({ state, commit, dispatch }, uid) {
   const media = await this._vm.$appFeathers.service('media').get(message.mediaId)
   console.log('downlaod file : ', media.filename)
   console.log('downlaod file : ', this._vm.$socket.io.uri)
-  const baseUrl = this._vm.$socket.io.uri
+  const baseUrl = 'http://192.168.1.102:3000'
 
   commit('updateMessage', {
     _id: uid,
@@ -756,11 +843,12 @@ export function readMessage ({ state, commit, dispatch }, data) {
             var index = _.findIndex(newRecipientStatus, { _id: data.from })
             newRecipientStatus.splice(index, 1, { ...match, status: match.status > data.status ? match.status : data.status })
 
-            const status = _.min(newRecipientStatus, o => o.status).status
+            const status = _.minBy(newRecipientStatus, o => o.status).status
+            console.log('status', status, newRecipientStatus)
             tx.executeSql('UPDATE message SET status = ?, recipientStatus = ? WHERE _id = ?', [status, JSON.stringify(newRecipientStatus), uid], (tx, messageResult) => {
-              if (state.currentUserId === data.from) {
-                commit('updateMessage', { ...message, recipientStatus: newRecipientStatus, status: status })
-              }
+              // if (state.currentUserId === data.from) {
+              commit('updateMessage', { ...message, recipientStatus: newRecipientStatus, status: status })
+              // }
             })
           }
         })

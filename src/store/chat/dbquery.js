@@ -1,4 +1,5 @@
 import { uid } from 'quasar'
+var _ = require('lodash')
 
 export function getMessageByUID ({ state, commit, dispatch }, uid) {
   return new Promise((resolve, reject) => {
@@ -26,7 +27,7 @@ export function getMessageByUID ({ state, commit, dispatch }, uid) {
 export function insertMessage ({ state }, data) {
   return new Promise((resolve, reject) => {
     this._vm.$db.transaction(async (tx) => {
-      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)', data, (tx, result) => {
+      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)', data, (tx, result) => {
         resolve(result)
       })
     }, (e) => {
@@ -141,7 +142,13 @@ export function updateConv ({ state, commit, dispatch }, data) {
         })
       } else {
         console.log('mulai insert conv')
-        tx.executeSql('INSERT INTO conv VALUES(?,?,?,?,?,?,?)', [data.message, data.convid, data.name, data.phoneNumber, state.currentUserId === data.convid ? 0 : 1, data.updatedAt, data.imgProfile], (tx, messageResult) => {
+        const isGroup = !!data.isGroup
+        let members = data.members
+        if (!members) {
+          members = []
+        }
+
+        tx.executeSql('INSERT INTO conv VALUES(?,?,?,?,?,?,?,?,?,?,?)', [data.message, data.convid, data.name, data.phoneNumber, state.currentUserId === data.convid ? 0 : 1, data.updatedAt, data.imgProfile, isGroup, JSON.stringify(members), data.publicKey, data.privateKey], (tx, messageResult) => {
           dispatch('loadConv')
         })
       }
@@ -165,12 +172,29 @@ export function updateConvToZero ({ state, commit, dispatch }, convid) {
   })
 }
 
-export function saveChat ({ state, commit, dispatch }, { text, mediaId, mediaType, localFile, thumb }) {
+export function saveChat ({ state, commit, dispatch, getters }, { text, mediaId, mediaType, localFile, thumb }) {
+  let to = []
+  let group = ''
+  const c = getters.currentUser
+  console.log(getters.currentUser)
+  if (c.isGroup === true || c.isGroup === 'true') {
+    _.each(c.members, (e) => {
+      if (e._id !== state.user._id) {
+        to.push(e._id)
+      }
+    })
+    group = state.currentUserId
+  } else {
+    to = [state.currentUserId]
+  }
+
   return new Promise((resolve, reject) => {
     this._vm.$db.transaction(async (tx) => {
       const _uid = uid()
-      const recipientStatus = [{ _id: state.currentUserId, status: 0 }]
-      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)', [_uid, text, state.currentUserId, state.user._id, JSON.stringify([state.currentUserId]), new Date().toISOString(), new Date().toISOString(), 0, JSON.stringify(recipientStatus), mediaId, mediaType, localFile, thumb], (tx, result) => {
+      const recipientStatus = _.map(to, (e) => {
+        return { _id: e, status: 0 }
+      })
+      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?,?)', [_uid, text, state.currentUserId, state.user._id, JSON.stringify(to), new Date().toISOString(), new Date().toISOString(), 0, JSON.stringify(recipientStatus), mediaId, mediaType, localFile, thumb, group], (tx, result) => {
         commit('addMessage', {
           message: text,
           rowid: result.insertId,
@@ -190,13 +214,31 @@ export function saveChat ({ state, commit, dispatch }, { text, mediaId, mediaTyp
       reject(e)
     }, () => {
       console.log('insert ok')
-      dispatch('findContactDetail', state.currentUserId).then((c) => {
-        console.log('insert ok 2')
+      if (!group) {
+        dispatch('findContactDetail', state.currentUserId).then((c) => {
+          console.log('insert ok 2')
+          dispatch('updateConv', {
+            message: text,
+            convid: state.currentUserId,
+            name: c.name,
+            phoneNumber: c.phoneNumber,
+            imgProfile: c.imgProfile,
+            updatedAt: new Date().toISOString()
+          }).then(() => {
+            console.log('insert ok 3')
+            resolve(true)
+          }).catch(e => {
+            console.log(e)
+          })
+        }).catch(e => {
+          console.log(e)
+        })
+      } else {
         dispatch('updateConv', {
           message: text,
           convid: state.currentUserId,
           name: c.name,
-          phoneNumber: c.phoneNumber,
+          phoneNumber: '',
           imgProfile: c.imgProfile,
           updatedAt: new Date().toISOString()
         }).then(() => {
@@ -205,9 +247,7 @@ export function saveChat ({ state, commit, dispatch }, { text, mediaId, mediaTyp
         }).catch(e => {
           console.log(e)
         })
-      }).catch(e => {
-        console.log(e)
-      })
+      }
     })
   })
 }
@@ -320,11 +360,80 @@ export function getPublicKey ({ commit }, _id) {
           const message = selects[0]
           resolve(JSON.parse(message.publickey))
         } else {
-          reject(false)
+          reject('user pub key not found')
         }
       })
     }, () => {
-      reject(false)
+      reject('user pub key not found')
+    }, () => {
+      // reject(false)
+    })
+  })
+}
+
+export function getGroupPublicKey ({ commit }, _id) {
+  return new Promise((resolve, reject) => {
+    this._vm.$db.transaction(async (tx) => {
+      tx.executeSql('SELECT * FROM conv WHERE convid = ?', [_id], (tx, messageResult) => {
+        let selects = messageResult.rows._array
+        if (!selects) {
+          selects = messageResult.rows
+        }
+        if (selects.length > 0 && selects[0].publicKey) {
+          const message = selects[0]
+          resolve(JSON.parse(message.publicKey))
+        } else {
+          reject('group pub key not found 1')
+        }
+      })
+    }, () => {
+      reject('group pub key not found 2')
+    }, () => {
+      // reject(false)
+    })
+  })
+}
+
+export function getGroupPrivateKey ({ commit }, _id) {
+  return new Promise((resolve, reject) => {
+    this._vm.$db.transaction(async (tx) => {
+      tx.executeSql('SELECT * FROM conv WHERE convid = ?', [_id], (tx, messageResult) => {
+        let selects = messageResult.rows._array
+        if (!selects) {
+          selects = messageResult.rows
+        }
+        if (selects.length > 0 && selects[0].privateKey) {
+          const message = selects[0]
+          resolve(JSON.parse(message.privateKey))
+        } else {
+          reject('group pub key not found 1')
+        }
+      })
+    }, () => {
+      reject('group pub key not found 2')
+    }, () => {
+      // reject(false)
+    })
+  })
+}
+
+export function getGroupData ({ commit }, _id) {
+  return new Promise((resolve, reject) => {
+    this._vm.$db.transaction(async (tx) => {
+      tx.executeSql('SELECT * FROM conv WHERE convid = ?', [_id], (tx, messageResult) => {
+        let selects = messageResult.rows._array
+        if (!selects) {
+          selects = messageResult.rows
+        }
+        if (selects.length > 0 && selects[0]) {
+          const message = selects[0]
+          resolve(message)
+        } else {
+          reject('group data not found 1 ' + _id)
+        }
+      })
+    }, () => {
+      reject('group data not found 2 ' + _id)
     }, () => {
       // reject(false)
     })

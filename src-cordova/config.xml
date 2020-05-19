@@ -31,4 +31,6 @@
     <allow-navigation href="about:*" />
     <preference name="AutoHideSplashScreen" value="false" />
     <preference name="ShowSplashScreenSpinner" value="false" />
+    <engine name="android" spec="^8.1.0" />
+    <engine name="windows" spec="^7.0.1" />
 </widget>

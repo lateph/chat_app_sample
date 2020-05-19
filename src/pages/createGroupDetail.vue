@@ -16,7 +16,7 @@
             </div>
           </div>
           <div>
-            <q-btn flat dense icon="more_vert" @click="$router.go(-1)" />
+            <q-btn flat dense icon="more_vert"  />
           </div>
         </div>
       </q-toolbar>
@@ -31,7 +31,7 @@
               color="grey"
               icon="camera"
             />
-            <q-input v-model="text" label="Group Subject" class="col-grow" />
+            <q-input v-model="name" label="Group Subject" class="col-grow" />
           </div>
 
           <q-card-section class="bg-grey-3">
@@ -41,6 +41,7 @@
               icon="done"
               class="absolute"
               style="top: 0; right: 12px; transform: translateY(-50%);"
+              @click="createGroup()"
             />
           </q-card-section>
 
@@ -64,7 +65,6 @@
 </template>
 
 <script>
-var _ = require('lodash')
 export default {
   // name: 'PageName',
   data: function () {
@@ -72,7 +72,8 @@ export default {
       prompt: false,
       address: '',
       loading: false,
-      selected: []
+      selected: [],
+      name: ''
     }
   },
   computed: {
@@ -86,45 +87,15 @@ export default {
     this.$store.commit('chat/clearMessage')
   },
   methods: {
-    save () {
-      this.$store.commit('chat/setSelectedForGroup', this.selected)
-      // this.$route.push('/createGroupDetail')
-    },
-    add (contact) {
-      const _c = _.find(this.selected, r => r._id === contact._id)
-      if (!_c) {
-        this.selected = [
-          ...this.selected,
-          {
-            ...contact
-          }
-        ]
-      } else {
-        console.log('reemove', this.selected)
-        _.remove(this.selected, r => r._id === contact._id)
-        this.selected = [...this.selected]
-      }
-      console.log(this.selected)
-    },
-    async syncMain () {
-      this.loading = true
-      try {
-        await this.$store.dispatch('chat/syncContact')
-        console.log('sync contact done')
-        await this.$store.dispatch('chat/loadLocalContact')
-        this.loading = false
-      } catch (error) {
-        console.log(error)
-        this.loading = false
-      }
-    },
-    startMessage () {
-      this.prompt = true
-    },
-    logout () {
-      this.$store.dispatch('chat/doLogout').then(() => {
-        this.$router.replace('/')
+    async createGroup () {
+      const group = await this.$store.dispatch('chat/createGroup', {
+        name: this.name,
+        image: ''
       })
+      await this.$store.dispatch('chat/newGroup', group)
+      this.$router.push('/detail/' + group._id)
+
+      console.log('crate success', group)
     }
   }
 }

@@ -1,8 +1,19 @@
 var _ = require('lodash')
+const colors = ['red-10', 'pink-10', 'purple-10', 'deep-purple', 'indigo-10', 'blue-10', 'light-blue-10', 'cyan-10', 'teal-10', 'green-10', 'light-green-10', 'lime-10', 'yellow-10', 'amber-10', 'orange-10', 'deep-orange-10', 'brown-10', 'grey-10', 'blue-grey-10']
+var addedColor = {}
 
 function convert (state, data) {
   const contact = _.find(state.contacts, { _id: data.fromid })
-  return { ...data, fromContact: contact }
+  let color = 'green-14'
+  if (contact) {
+    if (!addedColor[data.fromid]) {
+      color = _.sample(colors)
+      addedColor[data.fromid] = color
+    } else {
+      color = addedColor[data.fromid]
+    }
+  }
+  return { ...data, fromContact: contact, color: color }
 }
 
 export function contacts (state, data) {

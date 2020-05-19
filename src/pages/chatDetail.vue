@@ -16,7 +16,12 @@
                 {{ $store.getters['chat/currentUser'].name }}
               </div>
               <div style="font-size:11px; margin-top: -3px;" v-if="$store.state.chat.onlineUser &&  $store.state.chat.onlineUser.status">
-                {{ $store.state.chat.custom && $store.state.chat.custom.text == 'typing' ? 'typing ...' : 'Online' }}
+                <div v-if="!$store.getters['chat/currentUser'].isGroup">
+                  {{ $store.state.chat.custom && $store.state.chat.custom.text == 'typing' ? 'typing ...' : 'Online' }}
+                </div>
+              </div>
+              <div v-if="$store.getters['chat/currentUser'].isGroup">
+                {{$store.getters['chat/currentUser'].joinStringMember}}
               </div>
               <div style="font-size:11px; margin-top: -3px;" v-if="$store.state.chat.onlineUser &&  !$store.state.chat.onlineUser.status">
                 last seen {{ $store.state.chat.onlineUser.lastOnline  | moment("from", "now") }}
@@ -69,29 +74,14 @@
             :key="message.rowid"
           >
             <!-- me -->
-            <div
-              class="row justify-end full-width q-py-xs relative-position"
-              v-if="message.fromid == $store.state.chat.user._id"
-            >
+            <div class="row justify-end full-width q-py-xs relative-position" v-if="message.fromid == $store.state.chat.user._id">
               <div class="bg-blue-4 absolute-full" style="opacity: 0.3" v-if="message.selected" v-on:click="handleHold2(message)"></div>
-              <div
-                class="bg-green-2 q-pa-xs flex q-mr-xs"
-                style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;"
-                v-touch-hold="handleHold(message)"
-                v-on:click="handleHold2(message)"
-              >
-                <img :src="message.localFile" style="max-height: 300px;max-width: 100%" v-if="message.mediaType == 1" v-on:click="openFile(message.localFile)">
-                <q-btn unelevated color="green-4" class="q-pa-xs " style="width: 250px;border-radius:6px" v-if="message.mediaType == 2 || message.mediaType == 3" @click="openFile(JSON.parse(message.mediaId).file)">
-                  {{ JSON.parse(message.mediaId).name }}
-                </q-btn>
-                <!-- prettier-ignore -->
+              <!-- text Only -->
+              <div v-if="(!message.mediaType || message.mediaType == '0') && message.status != 4 && message.status != 5" class="bg-green-2 q-pa-xs flex q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
                 <div class="chatBubble" v-if="message.status != 4 && message.status != 5">{{ message.message }}<span class="text-blue-2" style="margin-left:30px;">|</span></div>
                 <div class="chatBubble deleted" v-if="message.status == 4 || message.status == 5">This Message Was Deleted<span class="text-blue-2" style="margin-left:30px;">|</span></div>
 
-                <div
-                  class="row self-end q-pt-xs"
-                  style="font-size: 10px;margin-left: auto"
-                >
+                <div class="row self-end q-pt-xs" style="font-size: 10px;margin-left: auto">
                   <div class="row justify-center">
                     <div class="row items-center">
                       <div class="q-mr-xs">{{ message.createdAt  | moment("from", "now") }}</div>
@@ -107,55 +97,139 @@
                   </div>
                 </div>
               </div>
+              <!-- Image = type = 1 -->
+              <div v-if="message.mediaType == 1 && message.status != 4 && message.status != 5" class="bg-green-2 q-pa-xs flex q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
+                <img :src="message.localFile" style="max-height: 300px;max-width: 100%" v-if="message.mediaType == 1" v-on:click="openFile(message.localFile)">
+                <q-btn unelevated color="green-4" class="q-pa-xs " style="width: 250px;border-radius:6px" v-if="message.mediaType == 2 || message.mediaType == 3" @click="openFile(JSON.parse(message.mediaId).file)">
+                  {{ JSON.parse(message.mediaId).name }}
+                </q-btn>
+                <!-- prettier-ignore -->
+                <!-- <div class="chatBubble" v-if="message.status != 4 && message.status != 5">{{ message.message }}<span class="text-blue-2" style="margin-left:30px;">|</span></div> -->
+                <div class="chatBubble deleted" v-if="message.status == 4 || message.status == 5">This Message Was Deleted<span class="text-blue-2" style="margin-left:30px;">|</span></div>
+
+                <div class="row self-end q-pt-xs  absolute" style="font-size: 10px;bottom: 10px;right:10px" >
+                  <div class="row justify-center">
+                    <div class="row items-center">
+                      <div class="q-mr-xs text-white">{{ message.createdAt  | moment("from", "now") }}</div>
+                      <q-icon name="schedule" style="font-size: 14px;" color="grey-14" v-if="message.status == 0"/>
+                      <q-icon name="done" style="font-size: 18px;" v-if="message.status == 1" color="white"/>
+                      <q-icon name="done_all" style="font-size: 18px;" v-if="message.status == 2" color="white"/>
+                      <q-icon name="done_all" style="font-size: 18px;" v-if="message.status == 3" color="blue" />
+                      <!-- <q-icon
+                        name="done"
+                        style="font-size: 10px; margin-left:-5px;"
+                      /> -->
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- other file type type = 2 -->
+              <div v-if="message.mediaType == 2 && message.status != 4 && message.status != 5" class="column bg-green-2 q-pa-xs flex q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
+                <q-btn unelevated color="green-4" class="q-pa-xs " style="width: 250px;border-radius:6px" v-if="message.mediaType == 2 || message.mediaType == 3" @click="openFile(JSON.parse(message.mediaId).file)">
+                  {{ JSON.parse(message.mediaId).name }}
+                </q-btn>
+                <!-- prettier-ignore -->
+                <!-- <div class="chatBubble" v-if="message.status != 4 && message.status != 5">{{ message.message }}<span class="text-blue-2" style="margin-left:30px;">|</span></div> -->
+                <!-- <div class="chatBubble deleted" v-if="message.status == 4 || message.status == 5">This Message Was Deleted<span class="text-blue-2" style="margin-left:30px;">|</span></div> -->
+
+                <div class="row self-end q-pt-xs" style="font-size: 10px;margin-left: auto">
+                  <div class="row justify-center">
+                    <div class="row items-center">
+                      <div class="q-mr-xs">{{ message.createdAt  | moment("from", "now") }}</div>
+                      <q-icon name="schedule" style="font-size: 14px;" color="grey-14" v-if="message.status == 0"/>
+                      <q-icon name="done" style="font-size: 18px;" v-if="message.status == 1"/>
+                      <q-icon name="done_all" style="font-size: 18px;" v-if="message.status == 2"/>
+                      <q-icon name="done_all" style="font-size: 18px;" v-if="message.status == 3" color="blue" />
+                      <!-- <q-icon
+                        name="done"
+                        style="font-size: 10px; margin-left:-5px;"
+                      /> -->
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="message.status == 4 || message.status == 5" class="column bg-green-2 q-pa-xs flex q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
+                <div class="chatBubble deleted" >This Message Was Deleted<span class="text-blue-2" style="margin-left:30px;"></span></div>
+                <div class="row self-end q-pt-xs" style="font-size: 10px;margin-left: auto">
+                  <div class="row justify-center">
+                    <div class="row items-center">
+                      <div class="q-mr-xs">{{ message.createdAt  | moment("from", "now") }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- him -->
-            <div
-              class="row justify-between full-width q-py-xs relative-position"
-              v-if="message.fromid != $store.state.chat.user._id"
-            >
+            <div  class="row justify-between full-width q-py-xs relative-position"  v-if="message.fromid != $store.state.chat.user._id">
               <div class="bg-blue-4 absolute-full" style="opacity: 0.3" v-if="message.selected" v-on:click="handleHold2(message)"></div>
-              <div
-                class="bg-grey-3 q-pa-xs flex justify-between  q-ml-xs"
-                style="max-width:80%; min-width:30px; border-radius:6px;"
-                v-touch-hold="handleHold(message)"
-                v-on:click="handleHold2(message)"
-              >
-                <!-- image me chat -->
-                <div v-if="message.mediaType == 1">
-                  <q-img :src="message.thumb" style="width: 200px; border-radius:3px;" v-if="!message.localFile">
-                    <q-btn
-                      :loading="message.downloading === true"
-                      :percentage="message.percentage"
-                      @click="download(message._id)"
-                      outline
-                      class="absolute-center"
-                      round
-                      color="white"
-                      icon="get_app"
-                    />
-                  </q-img>
-                  <q-img :src="message.localFile" style="width: 200px; border-radius:3px;" v-if="message.localFile" @click="openFile(message.localFile)"></q-img>
+              <!-- text Only -->
+              <div class="bg-grey-3 q-pa-xs q-ml-xs" style="border-radius: 6px;max-width:80%; min-width:30px;">
+                <div class="text-weight-medium" v-bind:class="['text-'+message.color]" v-if="message.groupId">{{message.fromContact.name}}</div>
+                <div v-if="(!message.mediaType || message.mediaType == '0')  && message.status != 4 && message.status != 5" class="flex justify-between  " style="" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
+                  <div class="chatBubble" >{{ message.message }}<span class="text-blue-2" style="margin-left:30px;"></span></div>
+                  <div
+                    class="row justify-end q-pt-xs"
+                    style="font-size: 10px;margin-left: auto"
+                  >
+                    <div>{{ message.createdAt  | moment("from", "now") }}</div>
+                  </div>
                 </div>
+                <!-- Image = type = 1 -->
+                <div v-if="message.mediaType == 1 && message.status != 4 && message.status != 5" class="flex justify-between relative-position" style="" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
+                  <!-- image me chat -->
+                  <div v-if="message.mediaType == 1">
+                    <q-img :src="message.thumb" style="width: 200px; border-radius:3px;" v-if="!message.localFile">
+                      <q-btn
+                        :loading="message.downloading === true"
+                        :percentage="message.percentage"
+                        @click="download(message._id)"
+                        outline
+                        class="absolute-center"
+                        round
+                        color="white"
+                        icon="get_app"
+                      />
+                    </q-img>
+                    <q-img :src="message.localFile" style="width: 200px; border-radius:3px;" v-if="message.localFile" @click="openFile(message.localFile)"></q-img>
+                  </div>
 
-                <div v-if="message.mediaType == 2 || message.mediaType == 3">
-                  <q-btn unelevated :loading="message.downloading === true" :percentage="message.percentage" color="grey-7" icon="get_app" class="q-pa-xs " style="width: 250px;border-radius:6px" v-if="!message.localFile" @click="download(message._id)">
-                    {{ JSON.parse(message.thumb).name }}
-                  </q-btn>
-                  <q-btn unelevated color="grey-7" class="q-pa-xs " style="width: 250px;border-radius:6px" v-if="message.localFile" @click="openFile(message.localFile)">
-                    {{ JSON.parse(message.thumb).name }}
-                  </q-btn>
+                  <!-- <div class="chatBubble">{{ message.message }}<span class="text-blue-2" style="margin-left:30px;">|</span></div> -->
+
+                  <div
+                    class="row justify-end q-pt-xs absolute" style="font-size: 10px;bottom: 10px;right:10px"
+                  >
+                    <div class="text-white">{{ message.createdAt  | moment("from", "now") }}</div>
+                  </div>
                 </div>
-
-                <!-- prettier-ignore -->
-                <div class="chatBubble" v-if="message.status != 4 && message.status != 5">{{ message.message }}<span class="text-blue-2" style="margin-left:30px;">|</span></div>
-                <div class="chatBubble deleted" v-if="message.status == 4 || message.status == 5">This Message Was Deleted<span class="text-blue-2" style="margin-left:30px;">|</span></div>
-
-                <div
-                  class="row justify-end q-pt-xs"
-                  style="font-size: 10px;margin-left: auto"
-                >
-                  <div>{{ message.createdAt  | moment("from", "now") }}</div>
+                <!-- other = type = 2 -->
+                <div v-if="message.mediaType == 2 && message.status != 4 && message.status != 5" class="column flex justify-between" style="" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
+                  <!-- image me chat -->
+                  <div v-if="message.mediaType == 2 || message.mediaType == 3">
+                    <q-btn unelevated :loading="message.downloading === true" :percentage="message.percentage" color="grey-7" icon="get_app" class="q-pa-xs " style="width: 250px;border-radius:6px;word-break: break-all;" v-if="!message.localFile" @click="download(message._id)">
+                      {{ JSON.parse(message.thumb).name }}
+                    </q-btn>
+                    <q-btn unelevated color="grey-7" class="q-pa-xs " style="width: 250px;border-radius:6px;word-break: break-all;" v-if="message.localFile" @click="openFile(message.localFile)">
+                      {{ JSON.parse(message.thumb).name }}
+                    </q-btn>
+                  </div>
+                  <div
+                    class="row justify-end q-pt-xs"
+                    style="font-size: 10px;margin-left: auto"
+                  >
+                    <div>{{ message.createdAt  | moment("from", "now") }}</div>
+                  </div>
+                </div>
+                <div v-if="message.status == 4 || message.status == 5" class="column flex justify-between" style="" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
+                  <!-- prettier-ignore -->
+                  <div class="chatBubble deleted">This Message Was Deleted<span class="text-blue-2" style="margin-left:30px;"></span></div>
+                  <div
+                    class="row justify-end q-pt-xs"
+                    style="font-size: 10px;margin-left: auto"
+                  >
+                    <div>{{ message.createdAt  | moment("from", "now") }}</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -214,7 +288,8 @@
 // const { getScrollTarget, setScrollPosition } = scroll
 var _ = require('lodash')
 import { mapState } from 'vuex'
-import { Dialog } from 'quasar'
+import { Dialog, uid } from 'quasar'
+
 // import { scroll } from 'quasar'
 // const { getScrollHeight } = scroll
 export default {
@@ -587,7 +662,8 @@ export default {
         const fileCordova = await new Promise((resolve, reject) => {
           window.resolveLocalFileSystemURL(file.uri, (fileEntry) => {
             console.log('file entry', fileEntry)
-            fileEntry.copyTo(dir, file.name, (file) => {
+            const ext = file.name.split('.').pop()
+            fileEntry.copyTo(dir, uid() + '.' + ext, (file) => {
               resolve(file)
             }, (e) => {
               console.log('fail to copy')
