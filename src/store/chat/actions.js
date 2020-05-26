@@ -389,7 +389,7 @@ export async function syncGroup ({ state, commit, dispatch }) {
     try {
       const c = _.find(state.convs, (e) => e.convid === r._id)
       if (!c) {
-        dispatch('newGroup', r)
+        await dispatch('newGroup', r)
       }
     } catch (error) {
       console.log('add message error', error)
@@ -492,7 +492,7 @@ export function openDB ({ state }) {
   this._vm.$db = db
   db.transaction((tx) => {
     tx.executeSql('CREATE TABLE IF NOT EXISTS message (_id, message, convid, fromid, toids, createdAt, updatedAt ,status, recipientStatus, mediaId, mediaType, localFile, thumb, groupId)')
-    tx.executeSql('CREATE TABLE IF NOT EXISTS conv (message, convid, name, phoneNumber, unreadCount INTEGER DEFAULT 0, updatedAt, imgProfile, isGroup, members, publicKey, privateKey)')
+    tx.executeSql('CREATE TABLE IF NOT EXISTS conv (message, convid, name, phoneNumber, unreadCount INTEGER DEFAULT 0, updatedAt, imgProfile, isGroup, members, admins, publicKey, privateKey)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS contact (_id, email, name, phoneNumber, country, publickey, imgProfile)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS setting (key, value)')
     tx.executeSql('CREATE INDEX IF NOT EXISTS convididx ON message (convid)')
@@ -509,9 +509,9 @@ export async function findContactDetail ({ state, dispatch, commit }, id) {
   let c = _.find(state.contacts, c => c._id === id)
   if (!c) {
     const data = await this._vm.$appFeathers.service('users').find({ query: { _id: id } })
-    const key = await this._vm.$appFeathers.service('userkeys').find({ query: { userId: data._id } })
+    const key = await this._vm.$appFeathers.service('userkey').find({ query: { userId: data.data[0]._id } })
     c = data.data[0]
-    c.publicKey = key.publicKey
+    c.publicKey = key.publicKey || key.data[0].publicKey
     c.name = c.nameId
     console.log('oke banget ', c, data)
     await dispatch('insertContact', c)
@@ -524,6 +524,7 @@ export async function createGroup ({ state, dispatch, commit }, data) {
   return await this._vm.$appFeathers.service('group').create({
     name: data.name,
     image: data.image,
+    admins: [state.user._id],
     members: [..._.map(state.selectedCreateGroup, (u) => {
       return u._id
     }), state.user._id]
@@ -531,6 +532,15 @@ export async function createGroup ({ state, dispatch, commit }, data) {
 }
 
 export async function newGroup ({ state, dispatch, commit }, group) {
+  for (let index = 0; index < group.members.length; index++) {
+    const element = group.members[index]
+    try {
+      await dispatch('findContactDetail', element)
+    } catch (error) {
+      console.log('error contact id', element)
+      console.log(error)
+    }
+  }
   await dispatch('updateConv', {
     message: '',
     convid: group._id,
@@ -540,6 +550,7 @@ export async function newGroup ({ state, dispatch, commit }, group) {
     imgProfile: group.image,
     isGroup: true,
     members: group.members,
+    admins: group.admins,
     publicKey: group.publicKey,
     privateKey: group.privateKey
   })
@@ -571,7 +582,11 @@ export async function addMessage ({ state, commit, dispatch }, data) {
     let pvkey = ''
     if (data.groupId) {
       id = data.groupId
-      pvkey = await dispatch('getGroupPrivateKey', data.groupId)
+      try {
+        pvkey = await dispatch('getGroupPrivateKey', data.groupId)
+      } catch (error) {
+        dispatch('syncGroup')
+      }
     } else {
       pvkey = state.privateKey
     }
@@ -732,7 +747,7 @@ export async function downloadMedia ({ state, commit, dispatch }, uid) {
   const media = await this._vm.$appFeathers.service('media').get(message.mediaId)
   console.log('downlaod file : ', media.filename)
   console.log('downlaod file : ', this._vm.$socket.io.uri)
-  const baseUrl = 'http://192.168.1.102:3000'
+  const baseUrl = 'https://jpdigi-ppayapi-sit.rintis.co.id/chat'
 
   commit('updateMessage', {
     _id: uid,
@@ -932,6 +947,7 @@ export async function uploadFile ({ commit, state, rootState }, { img, type, med
     fileCompress = img
   }
   console.log('file comprese upload', img, type)
+  const app = this._vm.$appFeathers
   return await new Promise((resolve, reject) => {
     var fd = new FormData()
     window.resolveLocalFileSystemURL(fileCompress, (fileEntry) => {
@@ -945,13 +961,28 @@ export async function uploadFile ({ commit, state, rootState }, { img, type, med
           fd.append('file', imgBlob)
           console.log(fd, this.result)
 
-          axios.post('/uploads', fd, {
+          axios.post('https://jpdigi-ppayapi-sit.rintis.co.id/chat/uploads', fd, {
             headers: {
               'Content-Type': 'multipart/form-data'
             }
           }).then(retAxios => {
-            console.log('sukses upload', retAxios)
-            resolve(retAxios)
+            const dataUpload = retAxios.data
+            console.log('sukses upload', dataUpload)
+            app.service('media').create({
+              multerId: 'asd',
+              filename: dataUpload.filename,
+              externalUrl: null,
+              mimetype: dataUpload.mimetype,
+              filesize: dataUpload.filesize
+            }).then((mediaAxios) => {
+              console.log('sukses create media', mediaAxios)
+              // console.log('sukses create media', mediaAxios.data._id)
+              resolve({
+                data: mediaAxios
+              })
+            }).catch(e => {
+              reject(e)
+            })
           }).catch(e => {
             reject(e)
           })

@@ -51,7 +51,7 @@ export default {
   data: function () {
     return {
       email: '',
-      password: ''
+      password: '087859500822'
     }
   },
   methods: {

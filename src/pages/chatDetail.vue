@@ -20,7 +20,7 @@
                   {{ $store.state.chat.custom && $store.state.chat.custom.text == 'typing' ? 'typing ...' : 'Online' }}
                 </div>
               </div>
-              <div v-if="$store.getters['chat/currentUser'].isGroup">
+              <div v-if="$store.getters['chat/currentUser'].isGroup" @click="groupDetail = true">
                 {{$store.getters['chat/currentUser'].joinStringMember}}
               </div>
               <div style="font-size:11px; margin-top: -3px;" v-if="$store.state.chat.onlineUser &&  !$store.state.chat.onlineUser.status">
@@ -29,8 +29,18 @@
             </div>
           </div>
           <div>
-            <q-btn flat dense icon="more_vert" v-if="anySelected" />
-            <q-btn flat dense icon="more_vert" @click="$router.go(-1)" />
+            <q-btn flat dense icon="more_vert" v-if="$store.getters['chat/currentUser'].isGroup">
+              <q-menu>
+                <q-list style="min-width: 100px">
+                  <q-item clickable v-close-popup @click="logout()">
+                    <q-item-section>Logout</q-item-section>
+                  </q-item>
+                  <q-item clickable v-close-popup @click="syncMain()">
+                    <q-item-section>Sync Contact</q-item-section>
+                  </q-item>
+                </q-list>
+              </q-menu>
+            </q-btn>
           </div>
         </div>
 
@@ -267,19 +277,116 @@
           @keydown.enter="Enter($event)"
         />
       </div>
-      <div class="row content-end q-pa-xs" v-if="showSendBut">
+      <div class="row content-end q-pa-xs" v-if="message.length == 0">
         <q-btn flat dense icon="camera_alt" @click="openCamera"/>
         <q-btn flat dense icon="mic" @click="recordAudio"/>
       </div>
       <div
         class="row content-end justify-center content-center"
         style="position: relative; width: 50px;"
-        v-if="!showSendBut"
+        v-if="message.length > 0"
       >
         <q-icon name="play_circle_filled" style="font-size: 38px;" />
         <div class="transparentSend" @mousedown.prevent.stop="postMsg()"></div>
       </div>
     </q-footer>
+
+    <q-dialog v-model="groupDetail" maximized>
+      <q-layout container class="bg-white">
+        <q-header class="bg-primary">
+          <q-toolbar>
+            <q-btn flat @click="groupDetail = false" round dense icon="arrow_back" />
+            <q-toolbar-title>{{ $store.getters['chat/currentUser'].name }}</q-toolbar-title>
+            <q-btn flat round dense icon="person_add"  @click="groupDetail = false;groupAdd = true"/>
+          </q-toolbar>
+        </q-header>
+
+        <q-page-container>
+          <q-page padding>
+            asdad
+          </q-page>
+        </q-page-container>
+      </q-layout>
+    </q-dialog>
+
+    <q-dialog v-model="groupAdd" maximized>
+      <q-layout>
+        <q-header elevated>
+          <q-toolbar>
+            <q-btn flat dense icon="arrow_back_ios" @click="groupAdd = false" />
+
+            <div class="row items-center justify-between full-width">
+              <div class="row items-center ">
+                <div>
+                  <div class="text-weight-medium">
+                    {{ $store.getters['chat/currentUser'].name }}
+                  </div>
+                  <div style="font-size:11px; margin-top: -3px;">
+                    {{selected.length}} of {{contacts.length}} Selected
+                  </div>
+                </div>
+              </div>
+              <div>
+                <q-btn flat dense icon="more_vert" @click="$router.go(-1)" />
+              </div>
+            </div>
+          </q-toolbar>
+        </q-header>
+
+        <q-page-container>
+          <q-page>
+            <q-scroll-area
+              v-if="selected.length > 0"
+              horizontal
+              style="height: 64px"
+              class="bg-grey-1 rounded-borders"
+            >
+              <div class="row no-wrap">
+                <div v-for="n in selected" :key="n._id" class="q-ma-sm relative-position">
+                  <q-avatar color="primary" text-color="white">
+                    {{ n.email.substring(0,1).toUpperCase() }}
+                  </q-avatar>
+                  <q-icon
+                    size="24px"
+                    color="grey"
+                    name="remove_circle"
+                    class="absolute-bottom-right"
+                  />
+                </div>
+              </div>
+            </q-scroll-area>
+            <q-list bordered>
+                <q-item v-for="contact in contactJoin" :key="contact._id" class="q-my-sm" clickable v-ripple @click="add(contact)">
+                <q-item-section avatar class="relative-position">
+                    <q-avatar color="primary" text-color="white">
+                    {{ contact.email.substring(0,1).toUpperCase() }}
+                    </q-avatar>
+                    <q-icon
+                      size="24px"
+                      color="green"
+                      name="check_circle"
+                      class="absolute-bottom-right"
+                      v-if="contact.selected"
+                    />
+                </q-item-section>
+
+                <q-item-section>
+                    <q-item-label></q-item-label>
+                    <q-item-label caption lines="1">{{ contact.name }}</q-item-label>
+                </q-item-section>
+
+                <q-item-section side>
+                    <!-- <q-icon name="chat_bubble" color="green" /> -->
+                </q-item-section>
+                </q-item>
+            </q-list>
+            <q-page-sticky position="bottom-right" :offset="[18, 18]">
+              <q-btn fab icon="arrow_forward" color="accent"  @click="save()"/>
+            </q-page-sticky>
+          </q-page>
+        </q-page-container>
+      </q-layout>
+    </q-dialog>
   </q-layout>
 </template>
 
@@ -296,6 +403,19 @@ export default {
   // name: 'PageName',
   computed: {
     ...mapState('chat', ['messages']),
+    contactJoin: {
+      get () {
+        return _.map(this.contacts, (e) => {
+          const selected = _.findIndex(this.selected, (s) => {
+            return s._id === e._id
+          })
+          return {
+            ...e,
+            selected: selected > -1
+          }
+        })
+      }
+    },
     anySelected: {
       get () {
         return _.findIndex(this.$store.getters['chat/messages'], (m) => {
@@ -306,6 +426,11 @@ export default {
     countSelected: {
       get () {
         return _.filter(this.$store.getters['chat/messages'], { selected: true }).length
+      }
+    },
+    contacts: {
+      get () {
+        return this.$store.state.chat.contacts
       }
     }
   },
@@ -321,6 +446,9 @@ export default {
   },
   data () {
     return {
+      selected: [],
+      groupDetail: false,
+      groupAdd: false,
       message: '',
       showSendBut: true,
       unwatch: null,

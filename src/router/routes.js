@@ -10,6 +10,7 @@ const routes = [
       { path: '/createChat', component: () => import('pages/createChat.vue') },
       { path: '/createGroup', component: () => import('pages/createGroup.vue') },
       { path: '/createGroupDetail', component: () => import('pages/createGroupDetail.vue') },
+      { path: '/addMemberGroup/:id', component: () => import('pages/addMemberGroup.vue') },
       { path: '/detail/:id', component: () => import('pages/chatDetail.vue') }
     ]
   }

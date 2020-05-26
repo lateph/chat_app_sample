@@ -137,7 +137,7 @@ export function updateConv ({ state, commit, dispatch }, data) {
       if (selects.length > 0) {
         const conv = selects[0]
         // console.log('mulai update conv')
-        tx.executeSql('UPDATE conv SET message = ?, updatedAt = ?, unreadCount = ?, name = ?, phoneNumber = ?  WHERE convid = ?', [data.message, data.updatedAt, state.currentUserId === data.convid ? 0 : conv.unreadCount + 1, data.name, data.phoneNumber, data.convid], (tx, messageResult) => {
+        tx.executeSql('UPDATE conv SET message = ?, updatedAt = ?, unreadCount = ?, name = ?, phoneNumber = ?, admins = ?  WHERE convid = ?', [data.message, data.updatedAt, state.currentUserId === data.convid ? 0 : conv.unreadCount + 1, data.name, data.phoneNumber, data.admins, data.convid], (tx, messageResult) => {
           dispatch('loadConv')
         })
       } else {
@@ -147,8 +147,12 @@ export function updateConv ({ state, commit, dispatch }, data) {
         if (!members) {
           members = []
         }
+        let admins = data.admins
+        if (!admins) {
+          admins = []
+        }
 
-        tx.executeSql('INSERT INTO conv VALUES(?,?,?,?,?,?,?,?,?,?,?)', [data.message, data.convid, data.name, data.phoneNumber, state.currentUserId === data.convid ? 0 : 1, data.updatedAt, data.imgProfile, isGroup, JSON.stringify(members), data.publicKey, data.privateKey], (tx, messageResult) => {
+        tx.executeSql('INSERT INTO conv VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', [data.message, data.convid, data.name, data.phoneNumber, state.currentUserId === data.convid ? 0 : 1, data.updatedAt, data.imgProfile, isGroup, JSON.stringify(members), JSON.stringify(admins), data.publicKey, data.privateKey], (tx, messageResult) => {
           dispatch('loadConv')
         })
       }
