@@ -1,6 +1,7 @@
 var _ = require('lodash')
 const colors = ['red-10', 'pink-10', 'purple-10', 'deep-purple', 'indigo-10', 'blue-10', 'light-blue-10', 'cyan-10', 'teal-10', 'green-10', 'light-green-10', 'lime-10', 'yellow-10', 'amber-10', 'orange-10', 'deep-orange-10', 'brown-10', 'grey-10', 'blue-grey-10']
 var addedColor = {}
+var moment = require('moment')
 
 function convert (state, data) {
   const contact = _.find(state.contacts, { _id: data.fromid })
@@ -35,9 +36,39 @@ export function setConv (state, data) {
 }
 
 export function insertMessages (state, data) {
-  state.dataMessage = [..._.map(data, (e) => {
-    return convert(state, e)
-  }), ...state.dataMessage]
+  _.each(data, (e) => {
+    const m = moment(e.createdAt)
+    const curDate = m.isSame(moment(), 'week') ? m.format('dddd') : m.format('DD/MM/YYYY')
+    if (state.dataMessage.length > 0 && String(state.dataMessage[0].mediaType) === '12') {
+      if (curDate === state.dataMessage[0].date) {
+        const [deleted, ...rest] = state.dataMessage
+        console.log('deleted', deleted)
+        state.dataMessage = [{
+          mediaType: 12,
+          createdAt: e.createdAt,
+          rowid: data.uid,
+          date: curDate
+        }, convert(state, e), ...rest]
+      } else {
+        state.dataMessage = [{
+          mediaType: 12,
+          createdAt: e.createdAt,
+          rowid: data.uid,
+          date: curDate
+        }, convert(state, e), ...state.dataMessage]
+      }
+    } else {
+      state.dataMessage = [{
+        mediaType: 12,
+        createdAt: e.createdAt,
+        rowid: data.uid,
+        date: curDate
+      }, convert(state, e), ...state.dataMessage]
+    }
+  })
+  // state.dataMessage = [..._.map(data, (e) => {
+  //   return convert(state, e)
+  // }), ...state.dataMessage]
 }
 
 // recipientStatus should be not update also

@@ -4,8 +4,8 @@ const feathers = require('@feathersjs/feathers')
 const socketio = require('@feathersjs/socketio-client')
 const io = require('socket.io-client')
 import axios from 'axios'
-// const baseUrl = 'http://192.168.1.102:3030'
-const baseUrl = 'http://159.89.205.235:3030'
+const baseUrl = 'http://192.168.1.102:3030'
+// const baseUrl = 'http://159.89.205.235:3030'
 const chatInstance = axios.create({
   baseURL: baseUrl
 })

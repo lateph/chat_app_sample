@@ -80,7 +80,7 @@
           /> -->
           <div class="row q-mb-xs q-gutter-y-xs" v-for="message in $store.getters['chat/messages']" :key="message.rowid">
             <!-- me -->
-            <div class="row justify-end full-width q-py-xs relative-position" v-if="message.mediaType != 11 && message.fromid == $store.state.chat.user._id">
+            <div class="row justify-end full-width q-py-xs relative-position" v-if="message.mediaType < 11 && message.fromid == $store.state.chat.user._id">
               <div class="bg-blue-4 absolute-full" style="opacity: 0.3" v-if="message.selected" v-on:click="handleHold2(message)"></div>
               <!-- text Only -->
               <div v-if="(!message.mediaType || message.mediaType == '0') && message.status != 4 && message.status != 5" class="bg-green-2 q-pa-xs flex q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
@@ -168,7 +168,7 @@
             </div>
 
             <!-- him -->
-            <div  class="row justify-between full-width q-py-xs relative-position"  v-if="message.mediaType != 11 && message.fromid != $store.state.chat.user._id">
+            <div  class="row justify-between full-width q-py-xs relative-position"  v-if="message.mediaType < 11 && message.fromid != $store.state.chat.user._id">
               <div class="bg-blue-4 absolute-full" style="opacity: 0.3" v-if="message.selected" v-on:click="handleHold2(message)"></div>
               <!-- text Only -->
               <div class="bg-grey-3 q-pa-xs q-ml-xs" style="border-radius: 6px;max-width:80%; min-width:30px;">
@@ -254,6 +254,17 @@
                 <div v-if="message.message.code == 'left_from_group'">
                   {{message.message.userName}} left
                 </div>
+                <div v-if="message.message.code == 'add_admin_group'">
+                  {{message.message.targetUserName}} now an admin
+                </div>
+                <div v-if="message.message.code == 'date'">
+                  {{message.message.date}}
+                </div>
+              </div>
+            </div>
+            <div v-if="message.mediaType == 12" class="row justify-center full-width">
+              <div  class="bg-light-blue-6 q-pa-xs text-white q-mt-xs" style="font-size: 11px; border-radius: 5px">
+                {{message.date}}
               </div>
             </div>
           </div>
@@ -359,7 +370,7 @@
               </q-item-section>
               </q-item>
             </q-list>
-            <q-list class="bg-white">
+            <q-list class="bg-white" v-if="!disableChat">
               <q-item class="q-my-sm" clickable v-ripple @click="leftGroup">
                 <q-item-section avatar class="relative-position">
                   <q-icon
@@ -522,7 +533,9 @@ Vue.component('dynamic-from-now', {
     interval: { type: Number, default: 10000 }
   },
   data () {
-    return { fromNow: moment(this.value).fromNow(this.dropFixes) }
+    // return { fromNow: this.value }
+    return { fromNow: moment(this.value).format('HH:ss') }
+    // return { fromNow: moment(this.value).fromNow(this.dropFixes) }
   },
   mounted () {
     Clock.register(this.updateFromNow)
@@ -534,10 +547,11 @@ Vue.component('dynamic-from-now', {
   },
   methods: {
     updateFromNow () {
-      var newFromNow = moment(this.value).fromNow(this.dropFixes)
-      if (newFromNow !== this.fromNow) {
-        this.fromNow = newFromNow
-      }
+      // var newFromNow = moment(this.value).fromNow(this.dropFixes)
+      // if (newFromNow !== this.fromNow) {
+      //   this.fromNow = newFromNow
+      // }
+      // this.fromNow = moment(this.value).format('HH:ss')
     }
   },
   render (h) {
@@ -661,6 +675,12 @@ export default {
         message: 'Bottom Sheet message',
         actions: [
           {
+            label: 'Make Group Admin',
+            icon: 'person_add',
+            color: 'green',
+            id: 'addadmin'
+          },
+          {
             label: 'Remove ' + contact.name,
             icon: 'delete',
             color: 'red',
@@ -687,6 +707,14 @@ export default {
             localFile: ''
           })
           this.$store.dispatch('chat/sendPendingChat')
+          this.groupDetail = false
+        }
+        if (action.id === 'addadmin') {
+          await this.$store.dispatch('chat/addAdminGroup', {
+            _id: this.$store.getters['chat/currentUser'].convid,
+            member: contact._id,
+            contact: contact
+          })
           this.groupDetail = false
         }
       }).onCancel(() => {

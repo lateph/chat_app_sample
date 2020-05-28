@@ -293,7 +293,8 @@ export function removeCurrent ({ state, commit }) {
 export function loadMessage ({ state, commit, dispatch }, limit) {
   return new Promise((resolve, reject) => {
     db.transaction(function (tx) {
-      tx.executeSql('SELECT * FROM message WHERE convid=? ORDER BY createdAt DESC Limit ? OFFSET ?', [state.currentUserId, limit, state.dataMessage.length], (tx, rs) => {
+      const offset = state.dataMessage.length - _.filter(state.dataMessage, (o) => String(o.mediaType) === '12').length
+      tx.executeSql('SELECT * FROM message WHERE convid=? ORDER BY createdAt DESC Limit ? OFFSET ?', [state.currentUserId, limit, offset], (tx, rs) => {
         let selects = rs.rows._array
         if (!selects) {
           selects = rs.rows
@@ -381,6 +382,7 @@ export async function syncChat ({ state, commit, dispatch }) {
       console.log('addmessage 2')
       dispatch('setReceive', r)
     } catch (error) {
+      dispatch('setReceive', r)
       console.log('add message error', error)
     }
   }
@@ -405,7 +407,7 @@ export async function syncGroup ({ state, commit, dispatch }) {
       if (!c) {
         await dispatch('newGroup', r)
       } else {
-        if (r.members !== JSON.stringify(c.members)) {
+        if (r.members !== JSON.stringify(c.members) || r.admins !== JSON.stringify(c.admins)) {
           console.log('update karena member beda')
           await dispatch('newGroup', r)
         }
@@ -583,7 +585,7 @@ export async function addGroupMember ({ state, dispatch, commit }, { _id, member
 
 export async function leftGroup ({ state, dispatch, commit }, { _id }) {
   // add custom message
-  await this._vm.$appFeathers.service('group').patch(null, { $pull: { members: state.user._id } }, { query: { _id: _id } })
+  const group = await this._vm.$appFeathers.service('group').patch(null, { $pull: { members: state.user._id, admins: state.user._id } }, { query: { _id: _id } })
   await this._vm.$appFeathers.service('update').create({
     from: state.user._id,
     tos: [state.user._id],
@@ -592,6 +594,15 @@ export async function leftGroup ({ state, dispatch, commit }, { _id }) {
       groupId: _id
     })
   })
+  if (group.length > 0 && group[0].members.length > 0 && group[0].admins.length === 0) {
+    const contact = await dispatch('findContactDetail', group[0].members[0])
+    dispatch('addAdminGroup', {
+      _id: _id,
+      member: group[0].members[0],
+      contact: contact
+    })
+  }
+  console.log('new group', group)
 }
 
 export async function removeMemberGroup ({ state, dispatch, commit }, { _id, member }) {
@@ -605,6 +616,24 @@ export async function removeMemberGroup ({ state, dispatch, commit }, { _id, mem
     })
   })
   return await this._vm.$appFeathers.service('group').patch(null, { $pull: { members: member } }, { query: { _id: _id } })
+}
+
+export async function addAdminGroup ({ state, dispatch, commit }, { _id, member, contact }) {
+  // add custom message
+  await this._vm.$appFeathers.service('group').patch(null, { $push: { admins: member } }, { query: { _id: _id } })
+  await dispatch('saveChat', {
+    text: JSON.stringify({
+      code: 'add_admin_group',
+      userId: state.user._id,
+      userName: state.user.name,
+      targetUserId: contact._id,
+      targetUserName: contact.name
+    }),
+    mediaType: 11,
+    mediaId: '',
+    localFile: ''
+  })
+  dispatch('sendPendingChat')
 }
 
 export async function newGroup ({ state, dispatch, commit }, group) {
@@ -661,6 +690,7 @@ export async function addMessage ({ state, commit, dispatch }, data) {
       try {
         pvkey = await dispatch('getGroupPrivateKey', data.groupId)
       } catch (error) {
+        console.log('pvkey is error ', error)
         dispatch('syncGroup')
       }
     } else {
@@ -878,13 +908,22 @@ export async function downloadMedia ({ state, commit, dispatch }, uid) {
       )
     })
     if (filename) {
-      this._vm.$appFeathers.service('media').patch(null, { $pull: { to: state.user._id } }, { query: { _id: message.mediaId } })
-
       console.log('localFIle', filename)
+      const appF = this._vm.$appFeathers
+      var axios = this._vm.$chatAxios
       const imgCordova = await new Promise((resolve, reject) => {
         window.resolveLocalFileSystemURL(filename, (fileEntry) => {
           console.log('file entry', fileEntry)
           fileEntry.file((file) => {
+            appF.service('media').patch(null, { $pull: { to: state.user._id } }, { query: { _id: message.mediaId } }).then((mr) => {
+              console.log('should be check to delete media and file', mr)
+              if (mr.length > 0 && mr[0].to.length === 0) {
+                appF.service('media').remove(message.mediaId)
+                axios.delete('https://jpdigi-ppayapi-sit.rintis.co.id/chat/uploads/' + media.filename).then((file) => {
+                  console.log('file deleted')
+                })
+              }
+            })
             resolve(file)
           }, function (e) {
             reject(e)
