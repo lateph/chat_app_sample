@@ -78,13 +78,9 @@
             :sent="message.fromid != $store.state.chat.user._id"
             :bg-color="message.fromid != $store.state.chat.user._id ? 'amber-7' : 'light-green'"
           /> -->
-          <div
-            class="row q-mb-xs q-gutter-y-xs"
-            v-for="message in $store.getters['chat/messages']"
-            :key="message.rowid"
-          >
+          <div class="row q-mb-xs q-gutter-y-xs" v-for="message in $store.getters['chat/messages']" :key="message.rowid">
             <!-- me -->
-            <div class="row justify-end full-width q-py-xs relative-position" v-if="message.fromid == $store.state.chat.user._id">
+            <div class="row justify-end full-width q-py-xs relative-position" v-if="message.mediaType != 11 && message.fromid == $store.state.chat.user._id">
               <div class="bg-blue-4 absolute-full" style="opacity: 0.3" v-if="message.selected" v-on:click="handleHold2(message)"></div>
               <!-- text Only -->
               <div v-if="(!message.mediaType || message.mediaType == '0') && message.status != 4 && message.status != 5" class="bg-green-2 q-pa-xs flex q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
@@ -94,7 +90,7 @@
                 <div class="row self-end q-pt-xs" style="font-size: 10px;margin-left: auto">
                   <div class="row justify-center">
                     <div class="row items-center">
-                      <div class="q-mr-xs">{{ message.createdAt  | moment("from", "now") }}</div>
+                      <dynamic-from-now  class="q-mr-xs" :value="message.createdAt"></dynamic-from-now >
                       <q-icon name="schedule" style="font-size: 14px;" color="grey-14" v-if="message.status == 0"/>
                       <q-icon name="done" style="font-size: 18px;" v-if="message.status == 1"/>
                       <q-icon name="done_all" style="font-size: 18px;" v-if="message.status == 2"/>
@@ -109,7 +105,7 @@
               </div>
               <!-- Image = type = 1 -->
               <div v-if="message.mediaType == 1 && message.status != 4 && message.status != 5" class="bg-green-2 q-pa-xs flex q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
-                <img :src="message.localFile" style="max-height: 300px;max-width: 100%" v-if="message.mediaType == 1" v-on:click="openFile(message.localFile)">
+                <img :src="message.localFile" style="max-height: 300px;max-width: 100%; min-width: 150px" v-if="message.mediaType == 1" v-on:click="openFile(message.localFile)">
                 <q-btn unelevated color="green-4" class="q-pa-xs " style="width: 250px;border-radius:6px" v-if="message.mediaType == 2 || message.mediaType == 3" @click="openFile(JSON.parse(message.mediaId).file)">
                   {{ JSON.parse(message.mediaId).name }}
                 </q-btn>
@@ -120,7 +116,7 @@
                 <div class="row self-end q-pt-xs  absolute" style="font-size: 10px;bottom: 10px;right:10px" >
                   <div class="row justify-center">
                     <div class="row items-center">
-                      <div class="q-mr-xs text-white">{{ message.createdAt  | moment("from", "now") }}</div>
+                      <dynamic-from-now  class="q-mr-xs text-white" :value="message.createdAt"></dynamic-from-now >
                       <q-icon name="schedule" style="font-size: 14px;" color="grey-14" v-if="message.status == 0"/>
                       <q-icon name="done" style="font-size: 18px;" v-if="message.status == 1" color="white"/>
                       <q-icon name="done_all" style="font-size: 18px;" v-if="message.status == 2" color="white"/>
@@ -145,7 +141,7 @@
                 <div class="row self-end q-pt-xs" style="font-size: 10px;margin-left: auto">
                   <div class="row justify-center">
                     <div class="row items-center">
-                      <div class="q-mr-xs">{{ message.createdAt  | moment("from", "now") }}</div>
+                      <dynamic-from-now  class="q-mr-xs" :value="message.createdAt"></dynamic-from-now>
                       <q-icon name="schedule" style="font-size: 14px;" color="grey-14" v-if="message.status == 0"/>
                       <q-icon name="done" style="font-size: 18px;" v-if="message.status == 1"/>
                       <q-icon name="done_all" style="font-size: 18px;" v-if="message.status == 2"/>
@@ -164,7 +160,7 @@
                 <div class="row self-end q-pt-xs" style="font-size: 10px;margin-left: auto">
                   <div class="row justify-center">
                     <div class="row items-center">
-                      <div class="q-mr-xs">{{ message.createdAt  | moment("from", "now") }}</div>
+                      <dynamic-from-now  class="q-mr-xs" :value="message.createdAt"></dynamic-from-now>
                     </div>
                   </div>
                 </div>
@@ -172,7 +168,7 @@
             </div>
 
             <!-- him -->
-            <div  class="row justify-between full-width q-py-xs relative-position"  v-if="message.fromid != $store.state.chat.user._id">
+            <div  class="row justify-between full-width q-py-xs relative-position"  v-if="message.mediaType != 11 && message.fromid != $store.state.chat.user._id">
               <div class="bg-blue-4 absolute-full" style="opacity: 0.3" v-if="message.selected" v-on:click="handleHold2(message)"></div>
               <!-- text Only -->
               <div class="bg-grey-3 q-pa-xs q-ml-xs" style="border-radius: 6px;max-width:80%; min-width:30px;">
@@ -243,13 +239,30 @@
                 </div>
               </div>
             </div>
+
+            <div v-if="message.mediaType == 11" class="row justify-center full-width">
+              <div  class="bg-light-blue-6 q-pa-xs text-white q-mt-xs" style="font-size: 11px; border-radius: 5px">
+                <div v-if="message.message.code == 'create_group'">
+                  {{message.message.userName}} created group {{message.message.groupName}}
+                </div>
+                <div v-if="message.message.code == 'remove_from_group'">
+                  {{message.message.userName}} remove {{message.message.targetUserName}}
+                </div>
+                <div v-if="message.message.code == 'add_to_group'">
+                  {{message.message.userName}} add {{message.message.targetUserName}}
+                </div>
+                <div v-if="message.message.code == 'left_from_group'">
+                  {{message.message.userName}} left
+                </div>
+              </div>
+            </div>
           </div>
           <div ref="last" style="height: 1px;"></div>
         </q-scroll-area>
       </q-page>
     </q-page-container>
 
-    <q-footer class="row no-wrap q-py-xs justify-space q-px-xs">
+    <q-footer class="row no-wrap q-py-xs justify-space q-px-xs" v-if="!disableChat">
       <div class="row content-end q-pb-xs">
         <q-btn flat dense icon="add" @click="showBottomSheet(true)" />
       </div>
@@ -291,26 +304,86 @@
       </div>
     </q-footer>
 
+    <q-footer class="row no-wrap q-pa-xs justify-space bg-grey text-center" v-if="disableChat">
+      You can't send message to this group because you're no longer participant
+    </q-footer>
+
     <q-dialog v-model="groupDetail" maximized>
-      <q-layout container class="bg-white">
+      <q-layout class="bg-white">
         <q-header class="bg-primary">
           <q-toolbar>
             <q-btn flat @click="groupDetail = false" round dense icon="arrow_back" />
             <q-toolbar-title>{{ $store.getters['chat/currentUser'].name }}</q-toolbar-title>
-            <q-btn flat round dense icon="person_add"  @click="groupDetail = false;groupAdd = true"/>
+            <q-btn flat round dense icon="person_add"  @click="groupDetail = false;groupAdd = true" v-if="isAdmin"/>
           </q-toolbar>
         </q-header>
 
         <q-page-container>
-          <q-page padding>
-            asdad
+          <q-page class="bg-blue-grey-1">
+            <q-card class="my-card  bg-blue-7 no-round no-border-radius" >
+              <!-- <q-img
+                src="~assets/group.svg"
+                basic
+                style="max-height: 60vw"
+              >
+              </q-img> -->
+              <div style="background: url(./statics/group.png);height: 60vw;background-repeat: no-repeat;background-position: center;background-size: contain" class="q-pa-xs">
+                <div class="absolute-bottom text-white" style="font-size: 12px; bottom: 10px; left: 10px">
+                  Created By user-name, 16/09/2019
+                </div>
+              </div>
+            </q-card>
+            <q-list class="bg-white">
+              <q-item-label header>{{2}} participans</q-item-label>
+              <q-item v-for="contact in listMember" :key="contact._id" class="q-my-sm" clickable v-ripple @click="removeMember(contact)">
+              <q-item-section avatar class="relative-position">
+                  <q-avatar color="primary" text-color="white">
+                    {{ contact.email.substring(0,1).toUpperCase() }}
+                  </q-avatar>
+                  <q-icon
+                    size="24px"
+                    color="green"
+                    name="check_circle"
+                    class="absolute-bottom-right"
+                    v-if="contact.selected"
+                  />
+              </q-item-section>
+
+              <q-item-section>
+                  <q-item-label></q-item-label>
+                  <q-item-label caption lines="1">{{ contact.name }}</q-item-label>
+              </q-item-section>
+
+              <q-item-section side v-if="contact.isAdmin">
+                <q-btn outline rounded color="green" label="admin" size="xs" />
+              </q-item-section>
+              </q-item>
+            </q-list>
+            <q-list class="bg-white">
+              <q-item class="q-my-sm" clickable v-ripple @click="leftGroup">
+                <q-item-section avatar class="relative-position">
+                  <q-icon
+                    color="red"
+                    name="exit_to_app"
+                  />
+                </q-item-section>
+
+                <q-item-section>
+                    <q-item-label>Exit Group</q-item-label>
+                </q-item-section>
+
+                <q-item-section side>
+                    <!-- admin -->
+                </q-item-section>
+              </q-item>
+            </q-list>
           </q-page>
         </q-page-container>
       </q-layout>
     </q-dialog>
 
     <q-dialog v-model="groupAdd" maximized>
-      <q-layout>
+      <q-layout  class="bg-white">
         <q-header elevated>
           <q-toolbar>
             <q-btn flat dense icon="arrow_back_ios" @click="groupAdd = false" />
@@ -381,7 +454,7 @@
                 </q-item>
             </q-list>
             <q-page-sticky position="bottom-right" :offset="[18, 18]">
-              <q-btn fab icon="arrow_forward" color="accent"  @click="save()"/>
+              <q-btn fab icon="arrow_forward" color="accent"  @click="addToGroup()"/>
             </q-page-sticky>
           </q-page>
         </q-page-container>
@@ -396,9 +469,82 @@
 var _ = require('lodash')
 import { mapState } from 'vuex'
 import { Dialog, uid } from 'quasar'
+var moment = require('moment')
 
 // import { scroll } from 'quasar'
 // const { getScrollHeight } = scroll
+import Vue from 'vue'
+
+var Clock = new Vue({
+  created () {
+    this.listeners = 0 // set non-reactive counter
+  },
+  methods: {
+    start () {
+      this.interval = setInterval(this.emit, 10000)
+      console.log('start interval ', this.interval)
+    },
+    emit () {
+      console.log('tick')
+      this.$emit('tick')
+    },
+    register (cb) {
+      console.log('register')
+      if (!cb) return
+      if (this.listeners === 0) {
+        this.start()
+      }
+      this.listeners++
+      this.$on('tick', cb)
+    },
+    unregister (cb) {
+      if (!cb) return
+      this.listeners--
+      console.log('unregister', this.listeners)
+      this.$off('tick', cb)
+      if (this.listeners === 0) {
+        console.log('clear interval', this.interval)
+        clearInterval(this.interval)
+      }
+    }
+  }
+})
+
+Vue.component('dynamic-from-now', {
+  name: 'DynamicFromNow',
+  props: {
+    tag: { type: String, default: 'span' },
+    value: { type: String, default: () => moment().toISOString() },
+    dropFixes: {
+      default: false,
+      type: Boolean
+    },
+    interval: { type: Number, default: 10000 }
+  },
+  data () {
+    return { fromNow: moment(this.value).fromNow(this.dropFixes) }
+  },
+  mounted () {
+    Clock.register(this.updateFromNow)
+    this.$watch('value', this.updateFromNow)
+  },
+  beforeDestroy () {
+    console.log('beforedestroy', this.updateFromNow)
+    Clock.unregister(this.updateFromNow)
+  },
+  methods: {
+    updateFromNow () {
+      var newFromNow = moment(this.value).fromNow(this.dropFixes)
+      if (newFromNow !== this.fromNow) {
+        this.fromNow = newFromNow
+      }
+    }
+  },
+  render (h) {
+    return h(this.tag, { key: this.fromNow }, this.fromNow)
+  }
+})
+
 export default {
   // name: 'PageName',
   computed: {
@@ -430,7 +576,35 @@ export default {
     },
     contacts: {
       get () {
-        return this.$store.state.chat.contacts
+        return _.filter(this.$store.state.chat.contacts, (e) => {
+          return _.findIndex(this.$store.getters['chat/currentUser'].members, (x) => x._id === e._id) === -1
+        })
+      }
+    },
+    listMember: {
+      get () {
+        return _.map(this.$store.getters['chat/currentUser'].members, (e) => {
+          const index = _.findIndex(this.$store.getters['chat/currentUser'].admins, (x) => x === e._id)
+          return {
+            ...e,
+            isAdmin: index > -1
+          }
+        })
+      }
+    },
+    isAdmin: {
+      get () {
+        console.log(this.$store.getters['chat/currentUser'].admins)
+        return _.findIndex(this.$store.getters['chat/currentUser'].admins, (x) => x === this.$store.state.chat.user._id) > -1
+      }
+    },
+    disableChat: {
+      get () {
+        if (!this.$store.getters['chat/currentUser'].isGroup) {
+          return false
+        } else {
+          return _.findIndex(this.$store.getters['chat/currentUser'].members, (x) => x._id === this.$store.state.chat.user._id) === -1
+        }
       }
     }
   },
@@ -476,6 +650,108 @@ export default {
     console.log(this.$socket)
   },
   methods: {
+    async removeMember (contact) {
+      if (contact.isAdmin) {
+        return
+      }
+      if (!this.isAdmin) {
+        return
+      }
+      this.$q.bottomSheet({
+        message: 'Bottom Sheet message',
+        actions: [
+          {
+            label: 'Remove ' + contact.name,
+            icon: 'delete',
+            color: 'red',
+            id: 'delete'
+          }
+        ]
+      }).onOk(async action => {
+        // console.log('Action chosen:', action.id)
+        if (action.id === 'delete') {
+          await this.$store.dispatch('chat/removeMemberGroup', {
+            _id: this.$store.getters['chat/currentUser'].convid,
+            member: contact._id
+          })
+          await this.$store.dispatch('chat/saveChat', {
+            text: JSON.stringify({
+              code: 'remove_from_group',
+              userId: this.$store.state.chat.user._id,
+              userName: this.$store.state.chat.user.name,
+              targetUserId: contact._id,
+              targetUserName: contact.name
+            }),
+            mediaType: 11,
+            mediaId: '',
+            localFile: ''
+          })
+          this.$store.dispatch('chat/sendPendingChat')
+          this.groupDetail = false
+        }
+      }).onCancel(() => {
+        // console.log('Dismissed')
+      }).onDismiss(() => {
+        // console.log('I am triggered on both OK and Cancel')
+      })
+    },
+    async addToGroup () {
+      await this.$store.dispatch('chat/addGroupMember', {
+        _id: this.$store.getters['chat/currentUser'].convid,
+        members: _.map(this.selected, e => e._id)
+      })
+
+      for (let index = 0; index < this.selected.length; index++) {
+        const element = this.selected[index]
+        this.$store.dispatch('chat/saveChat', {
+          text: JSON.stringify({
+            code: 'add_to_group',
+            userId: this.$store.state.chat.user._id,
+            userName: this.$store.state.chat.user.name,
+            targetUserId: element._id,
+            targetUserName: element.name
+          }),
+          mediaType: 11,
+          mediaId: '',
+          localFile: ''
+        })
+      }
+      this.$store.dispatch('chat/sendPendingChat')
+      this.groupAdd = false
+    },
+    async leftGroup () {
+      await this.$store.dispatch('chat/leftGroup', {
+        _id: this.$store.getters['chat/currentUser'].convid
+      })
+      await this.$store.dispatch('chat/saveChat', {
+        text: JSON.stringify({
+          code: 'left_from_group',
+          userId: this.$store.state.chat.user._id,
+          userName: this.$store.state.chat.user.name
+        }),
+        mediaType: 11,
+        mediaId: '',
+        localFile: ''
+      })
+      this.$store.dispatch('chat/sendPendingChat')
+      this.groupDetail = false
+    },
+    add (contact) {
+      const _c = _.find(this.selected, r => r._id === contact._id)
+      if (!_c) {
+        this.selected = [
+          ...this.selected,
+          {
+            ...contact
+          }
+        ]
+      } else {
+        console.log('reemove', this.selected)
+        _.remove(this.selected, r => r._id === contact._id)
+        this.selected = [...this.selected]
+      }
+      console.log(this.selected)
+    },
     async deleteChat () {
       console.log('delete chat')
       Dialog.create({

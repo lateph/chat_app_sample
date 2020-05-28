@@ -33,6 +33,11 @@ export async function doLogin ({ state, dispatch, commit }, { email, password, s
   console.log('logedin start')
   commit('user', message.user)
   dispatch('openDB')
+  message.user.name = message.user.nameId
+  dispatch('setSetting', {
+    key: 'user',
+    value: JSON.stringify(message.user)
+  })
   await dispatch('loadKey')
   dispatch('updateToken', message.user._id)
   try {
@@ -41,6 +46,7 @@ export async function doLogin ({ state, dispatch, commit }, { email, password, s
   }
   await dispatch('loadConv')
   dispatch('sendPendingChat')
+  await dispatch('syncGroup')
   dispatch('syncChat')
 
   LocalStorage.set('jwt', message.accessToken)
@@ -52,12 +58,20 @@ export async function doLoginJwt ({ state, dispatch, commit }, { jwt }) {
     accessToken: jwt,
     strategy: 'jwt'
   })
-
+  LocalStorage.set('jwt', message.accessToken)
   commit('user', message.user)
+
   await dispatch('openDB')
+  console.log('message', message)
+  message.user.name = message.user.nameId
+  dispatch('setSetting', {
+    key: 'user',
+    value: JSON.stringify(message.user)
+  })
   await dispatch('loadKey')
   await dispatch('loadLocalContact')
   await dispatch('loadConv')
+  await dispatch('syncGroup')
   dispatch('syncChat')
   dispatch('updateToken', message.user._id)
   LocalStorage.set('jwt', message.accessToken)
@@ -67,11 +81,12 @@ export async function doLoginJwt ({ state, dispatch, commit }, { jwt }) {
 export async function localDataLoad ({ state, dispatch, commit }, { jwt }) {
   const decode = jwtDecode(jwt)
   console.log('localDataLoad', decode)
-  // @Todo check jwt to match
-  commit('user', {
-    _id: decode.payload.sub,
-    phoneNumber: decode.payload.phoneNumber
+
+  const user = await dispatch('getSetting', {
+    key: 'user'
   })
+  console.log(user)
+  commit('user', JSON.parse(user))
   console.log('user decodde', decode)
   dispatch('openDB')
   await dispatch('loadKey')
@@ -288,7 +303,7 @@ export function loadMessage ({ state, commit, dispatch }, limit) {
           resolve(selects)
         } else {
           console.log('empty user')
-          reject('user g ketemu')
+          reject('loadMessage empty')
         }
       }, function (tx, error) {
         console.log('total user e ', error.message)
@@ -325,7 +340,6 @@ export function loadConv ({ state, commit, dispatch }) {
   4. receive all readevent when we offline
 */
 export async function syncChat ({ state, commit, dispatch }) {
-  await dispatch('syncGroup')
   const deleteMessage = await dispatch('getUnsentDeleteMessage')
   console.log('message to delete', deleteMessage)
   _.forEach(deleteMessage, async message => {
@@ -390,12 +404,44 @@ export async function syncGroup ({ state, commit, dispatch }) {
       const c = _.find(state.convs, (e) => e.convid === r._id)
       if (!c) {
         await dispatch('newGroup', r)
+      } else {
+        if (r.members !== JSON.stringify(c.members)) {
+          console.log('update karena member beda')
+          await dispatch('newGroup', r)
+        }
       }
     } catch (error) {
       console.log('add message error', error)
     }
   }
   return true
+}
+
+export async function syncUpdate ({ state, commit, dispatch }) {
+  const data = await this._vm.$appFeathers.service('update').find({ query: { $limit: 1000, $sort: { createdAt: 1 }, tos: { $in: [state.user._id] } } })
+  console.log('list update', data.data.length)
+  for (let index = 0; index < data.data.length; index++) {
+    const r = data.data[index]
+    try {
+      await dispatch('prosesUpdate', r)
+    } catch (error) {
+      console.log('add message error', error)
+    }
+  }
+  return true
+}
+
+export async function prosesUpdate ({ state, commit, dispatch }, r) {
+  if (r.type === 'left_group' || r.type === 'remove_from_group') {
+    const params = JSON.parse(r.params)
+    const data = await this._vm.$appFeathers.service('group').get(params.groupId)
+    console.log('update group', data)
+    await dispatch('newGroup', data)
+  }
+  const nr = await this._vm.$appFeathers.service('update').patch(null, { $pull: { tos: state.user._id } }, { query: { _id: r._id } })
+  if (nr.length > 0 && nr[0].tos.length === 0) {
+    this._vm.$appFeathers.service('update').remove(nr[0]._id)
+  }
 }
 
 /*
@@ -531,6 +577,36 @@ export async function createGroup ({ state, dispatch, commit }, data) {
   })
 }
 
+export async function addGroupMember ({ state, dispatch, commit }, { _id, members }) {
+  return await this._vm.$appFeathers.service('group').patch(null, { $push: { members: { $each: members } } }, { query: { _id: _id } })
+}
+
+export async function leftGroup ({ state, dispatch, commit }, { _id }) {
+  // add custom message
+  await this._vm.$appFeathers.service('group').patch(null, { $pull: { members: state.user._id } }, { query: { _id: _id } })
+  await this._vm.$appFeathers.service('update').create({
+    from: state.user._id,
+    tos: [state.user._id],
+    type: 'left_group',
+    params: JSON.stringify({
+      groupId: _id
+    })
+  })
+}
+
+export async function removeMemberGroup ({ state, dispatch, commit }, { _id, member }) {
+  // add custom message
+  await this._vm.$appFeathers.service('update').create({
+    from: state.user._id,
+    tos: [member],
+    type: 'remove_from_group',
+    params: JSON.stringify({
+      groupId: _id
+    })
+  })
+  return await this._vm.$appFeathers.service('group').patch(null, { $pull: { members: member } }, { query: { _id: _id } })
+}
+
 export async function newGroup ({ state, dispatch, commit }, group) {
   for (let index = 0; index < group.members.length; index++) {
     const element = group.members[index]
@@ -608,7 +684,8 @@ export async function addMessage ({ state, commit, dispatch }, data) {
   }
   console.log('contactDetail', contactDetail)
 
-  if (data.from !== state.user._id) {
+  const mediaType = String(data.mediaType)
+  if (data.from !== state.user._id && mediaType !== '11') {
     dispatch('updateConv', {
       message: dText,
       convid: id,
@@ -909,7 +986,7 @@ export function setReadCurrentChat ({ state, commit, dispatch }, data) {
           })
           resolve(true)
         } else {
-          reject('user g ketemu')
+          reject('setReadCurrentChat fail')
         }
       }, function (tx, error) {
         console.log('total user e ', error)

@@ -128,39 +128,61 @@ export function updateMessageLocalFile ({ state }, { localFile, _id }) {
 }
 
 export function updateConv ({ state, commit, dispatch }, data) {
-  this._vm.$db.transaction((tx) => {
-    tx.executeSql('SELECT * FROM conv WHERE convid = ?', [data.convid], (tx, messageResult) => {
-      let selects = messageResult.rows._array
-      if (!selects) {
-        selects = messageResult.rows
-      }
-      if (selects.length > 0) {
-        const conv = selects[0]
-        // console.log('mulai update conv')
-        tx.executeSql('UPDATE conv SET message = ?, updatedAt = ?, unreadCount = ?, name = ?, phoneNumber = ?, admins = ?  WHERE convid = ?', [data.message, data.updatedAt, state.currentUserId === data.convid ? 0 : conv.unreadCount + 1, data.name, data.phoneNumber, data.admins, data.convid], (tx, messageResult) => {
-          dispatch('loadConv')
-        })
-      } else {
-        console.log('mulai insert conv')
-        const isGroup = !!data.isGroup
-        let members = data.members
-        if (!members) {
-          members = []
+  return new Promise((resolve, reject) => {
+    this._vm.$db.transaction((tx) => {
+      tx.executeSql('SELECT * FROM conv WHERE convid = ?', [data.convid], (tx, messageResult) => {
+        let selects = messageResult.rows._array
+        if (!selects) {
+          selects = messageResult.rows
         }
-        let admins = data.admins
-        if (!admins) {
-          admins = []
-        }
+        if (selects.length > 0) {
+          const conv = selects[0]
+          // console.log('mulai update conv')
+          let members = data.members
+          if (!members) {
+            members = JSON.parse(conv.members)
+          }
+          let admins = data.admins
+          if (!admins) {
+            admins = JSON.parse(conv.admins)
+          }
 
-        tx.executeSql('INSERT INTO conv VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', [data.message, data.convid, data.name, data.phoneNumber, state.currentUserId === data.convid ? 0 : 1, data.updatedAt, data.imgProfile, isGroup, JSON.stringify(members), JSON.stringify(admins), data.publicKey, data.privateKey], (tx, messageResult) => {
-          dispatch('loadConv')
-        })
-      }
+          tx.executeSql('UPDATE conv SET message = ?, updatedAt = ?, unreadCount = ?, name = ?, phoneNumber = ?, members = ?, admins = ?  WHERE convid = ?', [data.message, data.updatedAt, state.currentUserId === data.convid ? 0 : conv.unreadCount + 1, data.name, data.phoneNumber, JSON.stringify(members), JSON.stringify(admins), data.convid], (tx, messageResult) => {
+            console.log('loadConv')
+            dispatch('loadConv').then(() => {
+              resolve(true)
+            }).catch(() => {
+              resolve('fail update')
+            })
+          })
+        } else {
+          console.log('mulai insert conv')
+          const isGroup = !!data.isGroup
+          let members = data.members
+          if (!members) {
+            members = []
+          }
+          let admins = data.admins
+          if (!admins) {
+            admins = []
+          }
+
+          tx.executeSql('INSERT INTO conv VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', [data.message, data.convid, data.name, data.phoneNumber, state.currentUserId === data.convid ? 0 : 1, data.updatedAt, data.imgProfile, isGroup, JSON.stringify(members), JSON.stringify(admins), data.publicKey, data.privateKey], (tx, messageResult) => {
+            console.log('loadConv')
+            dispatch('loadConv').then(() => {
+              resolve(true)
+            }).catch(() => {
+              resolve('fail insert')
+            })
+          })
+        }
+      })
+    }, (e) => {
+      resolve(e)
+      console.log('update conv gagal', e)
+    }, () => {
+      // resolve(false)
     })
-  }, (e) => {
-    console.log('update conv gagal', e)
-  }, () => {
-    // console.log('update conv success')
   })
 }
 
@@ -238,6 +260,9 @@ export function saveChat ({ state, commit, dispatch, getters }, { text, mediaId,
           console.log(e)
         })
       } else {
+        if (String(mediaType) === '11') {
+          text = ''
+        }
         dispatch('updateConv', {
           message: text,
           convid: state.currentUserId,
@@ -271,7 +296,7 @@ export function loadLocalContact ({ state, commit }) {
           resolve(selects)
         } else {
           console.log('empty user')
-          reject('user g ketemu')
+          reject('loadLocalContact fail')
         }
       }, function (tx, error) {
         console.log('total user e ', error)

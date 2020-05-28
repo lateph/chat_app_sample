@@ -57,6 +57,8 @@
 </template>
 
 <script>
+var _ = require('lodash')
+
 export default {
   // name: 'PageName',
   data: function () {
@@ -69,7 +71,7 @@ export default {
   computed: {
     contacts: {
       get () {
-        return this.$store.state.chat.contacts
+        return _.filter(this.$store.state.chat.contacts, (e) => e._id !== this.$store.state.chat.user._id)
       }
     },
     convs: {

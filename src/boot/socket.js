@@ -4,8 +4,8 @@ const feathers = require('@feathersjs/feathers')
 const socketio = require('@feathersjs/socketio-client')
 const io = require('socket.io-client')
 import axios from 'axios'
-const baseUrl = 'http://192.168.1.102:3030'
-// const baseUrl = 'http://159.89.205.235:3030'
+// const baseUrl = 'http://192.168.1.102:3030'
+const baseUrl = 'http://159.89.205.235:3030'
 const chatInstance = axios.create({
   baseURL: baseUrl
 })
@@ -42,6 +42,7 @@ const _deviceready = (Vue, store, router) => {
 
   app.service('messages')
     .on('created', message => {
+      console.log('add message')
       store.dispatch('chat/addMessage', {
         ...message,
         _source: 'socket'
@@ -80,6 +81,22 @@ const _deviceready = (Vue, store, router) => {
       store.dispatch('chat/newGroup', group)
       // }
     })
+  app.service('group')
+    .on('patched', group => {
+      console.log('group patched', group)
+      // if (message.text === 'typing' || message.text === 'untyping') {
+      store.dispatch('chat/newGroup', group)
+      // }
+    })
+
+  app.service('update')
+    .on('created', group => {
+      console.log('update created', group)
+      // if (message.text === 'typing' || message.text === 'untyping') {
+      store.dispatch('chat/prosesUpdate', group)
+      // }
+    })
+
   console.log('added listener')
 }
 

@@ -93,6 +93,29 @@ export default {
         image: ''
       })
       await this.$store.dispatch('chat/newGroup', group)
+      // will be fixed for better code
+      console.log('group created', group)
+      await this.$store.dispatch('chat/setCurrent', group._id)
+      console.log('group setted', this.$store)
+      console.log('group setted', JSON.stringify(this.$store.state.chat.contacts))
+      console.log('group setted', JSON.stringify(this.$store.state.chat.currentUserId))
+      console.log('group setted', this.$store.getters['chat/currentUser'])
+
+      await this.$store.dispatch('chat/saveChat', {
+        text: JSON.stringify({
+          code: 'create_group',
+          user: this.$store.state.chat.user._id,
+          userName: this.$store.state.chat.user.name,
+          groupName: group.name
+        }),
+        mediaType: 11,
+        mediaId: '',
+        localFile: ''
+      })
+      this.$store.dispatch('chat/sendPendingChat')
+
+      console.log('chat saved')
+
       this.$router.push('/detail/' + group._id)
 
       console.log('crate success', group)

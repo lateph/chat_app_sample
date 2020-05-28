@@ -105,7 +105,7 @@ export default {
     },
     contacts: {
       get () {
-        return this.$store.state.chat.contacts
+        return _.filter(this.$store.state.chat.contacts, (e) => e._id !== this.$store.state.chat.user._id)
       }
     },
     convs: {
