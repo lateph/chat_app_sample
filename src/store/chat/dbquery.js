@@ -146,8 +146,11 @@ export function updateConv ({ state, commit, dispatch }, data) {
           if (!admins) {
             admins = JSON.parse(conv.admins)
           }
-
-          tx.executeSql('UPDATE conv SET message = ?, updatedAt = ?, unreadCount = ?, name = ?, phoneNumber = ?, members = ?, admins = ?  WHERE convid = ?', [data.message, data.updatedAt, state.currentUserId === data.convid ? 0 : conv.unreadCount + 1, data.name, data.phoneNumber, JSON.stringify(members), JSON.stringify(admins), data.convid], (tx, messageResult) => {
+          let unreadCount = data.unreadCount
+          if (unreadCount === null) {
+            unreadCount = state.currentUserId === data.convid ? 0 : conv.unreadCount + 1
+          }
+          tx.executeSql('UPDATE conv SET message = ?, updatedAt = ?, unreadCount = ?, name = ?, phoneNumber = ?, members = ?, admins = ?  WHERE convid = ?', [data.message, data.updatedAt, unreadCount, data.name, data.phoneNumber, JSON.stringify(members), JSON.stringify(admins), data.convid], (tx, messageResult) => {
             console.log('loadConv')
             dispatch('loadConv').then(() => {
               resolve(true)
@@ -166,8 +169,11 @@ export function updateConv ({ state, commit, dispatch }, data) {
           if (!admins) {
             admins = []
           }
-
-          tx.executeSql('INSERT INTO conv VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', [data.message, data.convid, data.name, data.phoneNumber, state.currentUserId === data.convid ? 0 : 1, data.updatedAt, data.imgProfile, isGroup, JSON.stringify(members), JSON.stringify(admins), data.publicKey, data.privateKey], (tx, messageResult) => {
+          let unreadCount = data.unreadCount
+          if (unreadCount === null) {
+            unreadCount = state.currentUserId === data.convid ? 0 : 1
+          }
+          tx.executeSql('INSERT INTO conv VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', [data.message, data.convid, data.name, data.phoneNumber, unreadCount, data.updatedAt, data.imgProfile, isGroup, JSON.stringify(members), JSON.stringify(admins), data.publicKey, data.privateKey], (tx, messageResult) => {
             console.log('loadConv')
             dispatch('loadConv').then(() => {
               resolve(true)

@@ -82,13 +82,17 @@ export async function localDataLoad ({ state, dispatch, commit }, { jwt }) {
   const decode = jwtDecode(jwt)
   console.log('localDataLoad', decode)
 
+  commit('user', {
+    _id: decode.payload.sub
+  })
+  dispatch('openDB')
+
   const user = await dispatch('getSetting', {
     key: 'user'
   })
   console.log(user)
   commit('user', JSON.parse(user))
   console.log('user decodde', decode)
-  dispatch('openDB')
   await dispatch('loadKey')
   try {
     await dispatch('loadLocalContact')
@@ -405,10 +409,13 @@ export async function syncGroup ({ state, commit, dispatch }) {
     try {
       const c = _.find(state.convs, (e) => e.convid === r._id)
       if (!c) {
+        console.log('jancok 1')
         await dispatch('newGroup', r)
       } else {
-        if (r.members !== JSON.stringify(c.members) || r.admins !== JSON.stringify(c.admins)) {
-          console.log('update karena member beda')
+        console.log('jancok 2', JSON.stringify(r.members), c.members)
+        console.log('jancok 2', JSON.stringify(r.admins), c.admins)
+        if (JSON.stringify(r.members) !== c.members || JSON.stringify(r.admins) !== c.admins) {
+          console.log('jancok 3')
           await dispatch('newGroup', r)
         }
       }
