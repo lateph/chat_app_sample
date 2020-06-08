@@ -409,13 +409,9 @@ export async function syncGroup ({ state, commit, dispatch }) {
     try {
       const c = _.find(state.convs, (e) => e.convid === r._id)
       if (!c) {
-        console.log('jancok 1')
         await dispatch('newGroup', r)
       } else {
-        console.log('jancok 2', JSON.stringify(r.members), c.members)
-        console.log('jancok 2', JSON.stringify(r.admins), c.admins)
         if (JSON.stringify(r.members) !== c.members || JSON.stringify(r.admins) !== c.admins) {
-          console.log('jancok 3')
           await dispatch('newGroup', r)
         }
       }
@@ -664,9 +660,10 @@ export async function newGroup ({ state, dispatch, commit }, group) {
     members: group.members,
     admins: group.admins,
     publicKey: group.publicKey,
-    privateKey: group.privateKey
+    privateKey: group.privateKey,
+    unreadCount: 0
   })
-  await dispatch('updateConvToZero', group._id)
+  // await dispatch('updateConvToZero', group._id)
 }
 
 export async function addMessage ({ state, commit, dispatch }, data) {

@@ -147,8 +147,12 @@ export function updateConv ({ state, commit, dispatch }, data) {
             admins = JSON.parse(conv.admins)
           }
           let unreadCount = data.unreadCount
-          if (unreadCount === null) {
-            unreadCount = state.currentUserId === data.convid ? 0 : conv.unreadCount + 1
+          if (unreadCount === undefined || unreadCount === null) {
+            let _c = parseInt(conv.unreadCount)
+            if (isNaN(_c)) {
+              _c = 0
+            }
+            unreadCount = state.currentUserId === data.convid ? 0 : _c + 1
           }
           tx.executeSql('UPDATE conv SET message = ?, updatedAt = ?, unreadCount = ?, name = ?, phoneNumber = ?, members = ?, admins = ?  WHERE convid = ?', [data.message, data.updatedAt, unreadCount, data.name, data.phoneNumber, JSON.stringify(members), JSON.stringify(admins), data.convid], (tx, messageResult) => {
             console.log('loadConv')
@@ -170,7 +174,7 @@ export function updateConv ({ state, commit, dispatch }, data) {
             admins = []
           }
           let unreadCount = data.unreadCount
-          if (unreadCount === null) {
+          if (unreadCount === undefined || unreadCount === null) {
             unreadCount = state.currentUserId === data.convid ? 0 : 1
           }
           tx.executeSql('INSERT INTO conv VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', [data.message, data.convid, data.name, data.phoneNumber, unreadCount, data.updatedAt, data.imgProfile, isGroup, JSON.stringify(members), JSON.stringify(admins), data.publicKey, data.privateKey], (tx, messageResult) => {
