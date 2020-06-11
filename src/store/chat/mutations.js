@@ -41,8 +41,9 @@ export function insertMessages (state, data) {
     const curDate = m.isSame(moment(), 'week') ? m.format('dddd') : m.format('DD/MM/YYYY')
     if (state.dataMessage.length > 0 && String(state.dataMessage[0].mediaType) === '12') {
       if (curDate === state.dataMessage[0].date) {
-        const [deleted, ...rest] = state.dataMessage
-        console.log('deleted', deleted)
+        const [, ...rest] = state.dataMessage
+        // const [deleted, ...rest] = state.dataMessage
+        // console.log('deleted', deleted)
         state.dataMessage = [{
           mediaType: 12,
           createdAt: e.createdAt,

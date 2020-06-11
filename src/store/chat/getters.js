@@ -1,9 +1,6 @@
 var _ = require('lodash')
 
 export function currentUser (state) {
-  console.log('curr', state.currentUserId)
-  console.log('curr', state.contacts)
-  console.log('curr', state.convs)
   let contact = _.find(state.contacts, { _id: state.currentUserId })
   if (!contact) {
     contact = _.find(state.convs, { convid: state.currentUserId })
@@ -40,7 +37,8 @@ export function messages (state) {
   // console.log(state.dataMessage)
   // return state.dataMessage
   return _.map(state.dataMessage, e => {
-    if (e.mediaType === 11 || e.mediaType === '11') {
+    const mt = String(e.mediaType)
+    if (mt === '11') {
       return {
         ...e,
         message: JSON.parse(e.message)

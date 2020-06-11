@@ -53,6 +53,12 @@
             {{countSelected}}
           </div>
           <div>
+            <q-btn
+              flat dense
+              v-if="countSelected == 1"
+              icon="reply"
+              @click="reply()"
+            />
             <q-btn flat dense icon="delete" v-if="anySelected" @click="deleteChat()"/>
           </div>
         </div>
@@ -78,29 +84,19 @@
             :sent="message.fromid != $store.state.chat.user._id"
             :bg-color="message.fromid != $store.state.chat.user._id ? 'amber-7' : 'light-green'"
           /> -->
-          <div class="row q-mb-xs q-gutter-y-xs" v-for="message in $store.getters['chat/messages']" :key="message.rowid">
+          <div class="row q-mb-xs q-gutter-y-xs" v-for="message in $store.getters['chat/messages']" :key="message.rowid" :id="'id-' + message._id">
             <!-- me -->
             <div class="row justify-end full-width q-py-xs relative-position" v-if="message.mediaType < 11 && message.fromid == $store.state.chat.user._id">
               <div class="bg-blue-4 absolute-full" style="opacity: 0.3" v-if="message.selected" v-on:click="handleHold2(message)"></div>
+              <div class="bg-green-4 absolute-full" style="opacity: 0.3" v-if="message.hightlight" v-on:click="handleHold2(message)"></div>
               <!-- text Only -->
-              <div v-if="(!message.mediaType || message.mediaType == '0') && message.status != 4 && message.status != 5" class="bg-green-2 q-pa-xs flex q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
-                <div class="chatBubble" v-if="message.status != 4 && message.status != 5">{{ message.message }}<span class="text-blue-2" style="margin-left:30px;">|</span></div>
-                <div class="chatBubble deleted" v-if="message.status == 4 || message.status == 5">This Message Was Deleted<span class="text-blue-2" style="margin-left:30px;">|</span></div>
+              <div v-if="(!message.mediaType || message.mediaType == '0') && message.status != 4 && message.status != 5" class="bg-green-2 q-pa-xs column q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
+                <replybox  v-if="message.params && message.params.replyMessage" :message="message.params.replyMessage" class="self-start" @click.native="scrollTo(message)"/>
+                <div class="row">
+                  <div class="chatBubble" v-if="message.status != 4 && message.status != 5">{{ message.message }}<span class="text-blue-2" style="margin-left:30px;">|</span></div>
+                  <div class="chatBubble deleted" v-if="message.status == 4 || message.status == 5">This Message Was Deleted<span class="text-blue-2" style="margin-left:30px;">|</span></div>
 
-                <div class="row self-end q-pt-xs" style="font-size: 10px;margin-left: auto">
-                  <div class="row justify-center">
-                    <div class="row items-center">
-                      <dynamic-from-now  class="q-mr-xs" :value="message.createdAt"></dynamic-from-now >
-                      <q-icon name="schedule" style="font-size: 14px;" color="grey-14" v-if="message.status == 0"/>
-                      <q-icon name="done" style="font-size: 18px;" v-if="message.status == 1"/>
-                      <q-icon name="done_all" style="font-size: 18px;" v-if="message.status == 2"/>
-                      <q-icon name="done_all" style="font-size: 18px;" v-if="message.status == 3" color="blue" />
-                      <!-- <q-icon
-                        name="done"
-                        style="font-size: 10px; margin-left:-5px;"
-                      /> -->
-                    </div>
-                  </div>
+                  <statusbox :message="message" />
                 </div>
               </div>
               <!-- Image = type = 1 -->
@@ -113,21 +109,7 @@
                 <!-- <div class="chatBubble" v-if="message.status != 4 && message.status != 5">{{ message.message }}<span class="text-blue-2" style="margin-left:30px;">|</span></div> -->
                 <div class="chatBubble deleted" v-if="message.status == 4 || message.status == 5">This Message Was Deleted<span class="text-blue-2" style="margin-left:30px;">|</span></div>
 
-                <div class="row self-end q-pt-xs  absolute" style="font-size: 10px;bottom: 10px;right:10px" >
-                  <div class="row justify-center">
-                    <div class="row items-center">
-                      <dynamic-from-now  class="q-mr-xs text-white" :value="message.createdAt"></dynamic-from-now >
-                      <q-icon name="schedule" style="font-size: 14px;" color="grey-14" v-if="message.status == 0"/>
-                      <q-icon name="done" style="font-size: 18px;" v-if="message.status == 1" color="white"/>
-                      <q-icon name="done_all" style="font-size: 18px;" v-if="message.status == 2" color="white"/>
-                      <q-icon name="done_all" style="font-size: 18px;" v-if="message.status == 3" color="blue" />
-                      <!-- <q-icon
-                        name="done"
-                        style="font-size: 10px; margin-left:-5px;"
-                      /> -->
-                    </div>
-                  </div>
-                </div>
+                <statusbox :message="message" />
               </div>
               <!-- other file type type = 2 -->
               <div v-if="message.mediaType == 2 && message.status != 4 && message.status != 5" class="column bg-green-2 q-pa-xs flex q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
@@ -138,21 +120,7 @@
                 <!-- <div class="chatBubble" v-if="message.status != 4 && message.status != 5">{{ message.message }}<span class="text-blue-2" style="margin-left:30px;">|</span></div> -->
                 <!-- <div class="chatBubble deleted" v-if="message.status == 4 || message.status == 5">This Message Was Deleted<span class="text-blue-2" style="margin-left:30px;">|</span></div> -->
 
-                <div class="row self-end q-pt-xs" style="font-size: 10px;margin-left: auto">
-                  <div class="row justify-center">
-                    <div class="row items-center">
-                      <dynamic-from-now  class="q-mr-xs" :value="message.createdAt"></dynamic-from-now>
-                      <q-icon name="schedule" style="font-size: 14px;" color="grey-14" v-if="message.status == 0"/>
-                      <q-icon name="done" style="font-size: 18px;" v-if="message.status == 1"/>
-                      <q-icon name="done_all" style="font-size: 18px;" v-if="message.status == 2"/>
-                      <q-icon name="done_all" style="font-size: 18px;" v-if="message.status == 3" color="blue" />
-                      <!-- <q-icon
-                        name="done"
-                        style="font-size: 10px; margin-left:-5px;"
-                      /> -->
-                    </div>
-                  </div>
-                </div>
+                <statusbox :message="message" />
               </div>
 
               <div v-if="message.status == 4 || message.status == 5" class="column bg-green-2 q-pa-xs flex q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
@@ -170,9 +138,11 @@
             <!-- him -->
             <div  class="row justify-between full-width q-py-xs relative-position"  v-if="message.mediaType < 11 && message.fromid != $store.state.chat.user._id">
               <div class="bg-blue-4 absolute-full" style="opacity: 0.3" v-if="message.selected" v-on:click="handleHold2(message)"></div>
+              <div class="bg-green-4 absolute-full" style="opacity: 0.3" v-if="message.hightlight" v-on:click="handleHold2(message)"></div>
               <!-- text Only -->
               <div class="bg-grey-3 q-pa-xs q-ml-xs" style="border-radius: 6px;max-width:80%; min-width:30px;">
                 <div class="text-weight-medium" v-bind:class="['text-'+message.color]" v-if="message.groupId">{{message.fromContact.name}}</div>
+                <replybox  v-if="message.params && message.params.replyMessage" :message="message.params.replyMessage" class="self-start"  @click.native="scrollTo(message)"/>
                 <div v-if="(!message.mediaType || message.mediaType == '0')  && message.status != 4 && message.status != 5" class="flex justify-between  " style="" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
                   <div class="chatBubble" >{{ message.message }}<span class="text-blue-2" style="margin-left:30px;"></span></div>
                   <div
@@ -273,45 +243,56 @@
       </q-page>
     </q-page-container>
 
-    <q-footer class="row no-wrap q-py-xs justify-space q-px-xs" v-if="!disableChat">
-      <div class="row content-end q-pb-xs">
-        <q-btn flat dense icon="add" @click="showBottomSheet(true)" />
+    <q-footer v-if="!disableChat">
+      <div class="bg-grey-3 q-ma-xs rounded-borders row" v-if="replyMessage">
+        <div class="bg-purple-10 q-mr-xs" style="width:5px; border-radius: 4px 0 0 4px">
+        </div>
+        <div class="relative-position col-auto" style="flex-grow: 1">
+          <div v-bind:class="['text-purple-10']" class="text-weight-medium">{{replyMessage.fromContact.name}}</div>
+          <div class="text-black">{{replyMessage.message}}</div>
+          <q-icon name="close" color="grey-7" class="absolute-top-right" @click="closeReply()"/>
+        </div>
       </div>
-      <div style="flex-grow:1;">
-        <q-input
-          ref="inputField"
-          rounded
-          borderless
-          autogrow
-          dense
-          type="textarea"
-          v-model.trim="message"
-          input-class="bg-white q-px-md"
-          input-style="border-radius: 16px; max-height:100px; "
-          placeholder="Type a message"
-          @input="
-            postCustoms('typing');
-            message.length > 0 ? (showSendBut = false) : (showSendBut = true);
-          "
-          @blur="
-            postCustoms('untyping');
-            showSendBut = true;
-          "
-          @keydown.shift.enter="shiftPlusEnter($event)"
-          @keydown.enter="Enter($event)"
-        />
-      </div>
-      <div class="row content-end q-pa-xs" v-if="message.length == 0">
-        <q-btn flat dense icon="camera_alt" @click="openCamera"/>
-        <q-btn flat dense icon="mic" @click="recordAudio"/>
-      </div>
-      <div
-        class="row content-end justify-center content-center"
-        style="position: relative; width: 50px;"
-        v-if="message.length > 0"
-      >
-        <q-icon name="play_circle_filled" style="font-size: 38px;" />
-        <div class="transparentSend" @mousedown.prevent.stop="postMsg()"></div>
+      <div class="row no-wrap q-py-xs justify-space q-px-xs" >
+        <div class="row content-end q-pb-xs">
+          <q-btn flat dense icon="add" @click="showBottomSheet(true)" />
+        </div>
+        <div style="flex-grow:1;">
+          <q-input
+            ref="inputField"
+            rounded
+            borderless
+            autogrow
+            dense
+            type="textarea"
+            v-model.trim="message"
+            input-class="bg-white q-px-md"
+            input-style="border-radius: 16px; max-height:100px; "
+            placeholder="Type a message"
+            @input="
+              postCustoms('typing');
+              message.length > 0 ? (showSendBut = false) : (showSendBut = true);
+            "
+            @blur="
+              postCustoms('untyping');
+              showSendBut = true;
+            "
+            @keydown.shift.enter="shiftPlusEnter($event)"
+            @keydown.enter="Enter($event)"
+          />
+        </div>
+        <div class="row content-end q-pa-xs" v-if="message.length == 0">
+          <q-btn flat dense icon="camera_alt" @click="openCamera"/>
+          <q-btn flat dense icon="mic" @click="recordAudio"/>
+        </div>
+        <div
+          class="row content-end justify-center content-center"
+          style="position: relative; width: 50px;"
+          v-if="message.length > 0"
+        >
+          <q-icon name="play_circle_filled" style="font-size: 38px;" />
+          <div class="transparentSend" @mousedown.prevent.stop="postMsg()"></div>
+        </div>
       </div>
     </q-footer>
 
@@ -481,6 +462,8 @@ var _ = require('lodash')
 import { mapState } from 'vuex'
 import { Dialog, uid } from 'quasar'
 var moment = require('moment')
+import replybox from './replybox.vue'
+import statusbox from './statusbox.vue'
 
 // import { scroll } from 'quasar'
 // const { getScrollHeight } = scroll
@@ -542,7 +525,6 @@ Vue.component('dynamic-from-now', {
     this.$watch('value', this.updateFromNow)
   },
   beforeDestroy () {
-    console.log('beforedestroy', this.updateFromNow)
     Clock.unregister(this.updateFromNow)
   },
   methods: {
@@ -560,6 +542,10 @@ Vue.component('dynamic-from-now', {
 })
 
 export default {
+  components: {
+    replybox,
+    statusbox
+  },
   // name: 'PageName',
   computed: {
     ...mapState('chat', ['messages']),
@@ -645,7 +631,9 @@ export default {
       fistDone: false,
       fetching: false,
       loadNotDone: true,
-      eachLoad: 5
+      eachLoad: 5,
+      replyMessage: null,
+      disableScrollCheck: false
     }
   },
   beforeRouteLeave (to, from, next) {
@@ -818,11 +806,60 @@ export default {
         _t.$store.dispatch('chat/switchSelected', index._id)
       }
     },
+    async scrollTo (index) {
+      console.log('wayae scroll')
+      let stop = false
+      let ele = document.getElementById('id-' + index.params.refId)
+      let offset = null
+      this.disableScrollCheck = true
+      console.log('ketemu', ele)
+      while (!stop) {
+        if (ele) {
+          offset = ele.offsetTop
+          stop = true
+          console.log('target', ele)
+        } else {
+          try {
+            const ds = await this.$store.dispatch('chat/loadMessage', this.eachLoad)
+            if (ds.length === 0) {
+              throw Error()
+            }
+            await new Promise((resolve, reject) => {
+              this.$nextTick(() => {
+                setTimeout(() => {
+                  resolve()
+                }, 200)
+              })
+            })
+            ele = document.getElementById('id-' + index.params.refId)
+          } catch (error) {
+            stop = true
+          }
+        }
+      }
+      if (offset !== null) {
+        this.$store.commit('chat/updateMessage', {
+          _id: index.params.refId,
+          hightlight: true
+        })
+        setTimeout(() => {
+          this.$store.commit('chat/updateMessage', {
+            _id: index.params.refId,
+            hightlight: false
+          })
+        }, 1000)
+        console.log('message', offset)
+        this.$refs.scrollArea.setScrollPosition(offset, 100)
+        setTimeout(() => {
+          this.disableScrollCheck = false
+        }, 200)
+      }
+    },
     handleHold2 (index) {
-      console.log('click')
       const a = _.find(this.$store.getters['chat/messages'], (m) => {
         return m.selected === true
       })
+      console.log('click')
       if (a) {
         console.log('siwtch')
         this.$store.dispatch('chat/switchSelected', index._id)
@@ -832,7 +869,7 @@ export default {
       this.$store.commit('chat/clearSelected')
     },
     onScrollSecond () {
-      if (this.$refs.scrollArea.scrollPosition === 0 && this.fistDone && this.loadNotDone && !this.fetching) {
+      if (this.$refs.scrollArea.scrollPosition === 0 && this.fistDone && this.loadNotDone && !this.fetching && !this.disableScrollCheck) {
         const heightBefore = this.$refs.scrollArea.scrollPosition
         this.fetching = true
         this.$store.dispatch('chat/loadMessage', this.eachLoad).then(() => {
@@ -1190,12 +1227,20 @@ export default {
       // clear the textarea
       // console.log(this.$store)
       // save in store to be shown in message
+      // 0: text
+      //
+      const params = {}
+      if (this.replyMessage) {
+        params.refId = this.replyMessage._id
+      }
       const a = await this.$store.dispatch('chat/saveChat', {
         text: this.message,
         mediaType: 0,
         mediaId: '',
-        localFile: ''
+        localFile: '',
+        params
       })
+      this.closeReply()
       console.log('kok insert', a)
 
       this.animateScroll(100)
@@ -1236,6 +1281,16 @@ export default {
 
           this.typing = false
       }
+    },
+    reply () {
+      this.replyMessage = _.find(this.$store.getters['chat/messages'], (m) => {
+        return m.selected === true
+      })
+      console.log(this.replyMessage)
+      this.clearSelected()
+    },
+    closeReply () {
+      this.replyMessage = null
     }
   }
 }

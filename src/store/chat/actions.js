@@ -149,7 +149,7 @@ export function updateToken ({ state, commit }, userId) {
   })
 }
 
-export async function sendChat ({ state, dispatch, getters }, { text, localFile, uid, to, mediaType, mediaId, createdAt, updatedAt, groupId, convid }) {
+export async function sendChat ({ state, dispatch, getters }, { text, localFile, uid, to, mediaType, mediaId, createdAt, updatedAt, groupId, convid, params }) {
   let _mediaId = ''
   let thumb = ''
   if (mediaType === 1 || mediaType === '1') {
@@ -220,7 +220,8 @@ export async function sendChat ({ state, dispatch, getters }, { text, localFile,
     createdAt: createdAt,
     updatedAt: updatedAt,
     groupId: groupId,
-    thumb
+    thumb,
+    params
   })
 
   return retMessage
@@ -245,6 +246,7 @@ export async function sendPendingChat ({ dispatch }) {
             updatedAt: r.updatedAt,
             uid: r._id,
             groupId: r.groupId,
+            params: r.params,
             to: JSON.parse(r.toids)
           })
         })
@@ -304,7 +306,7 @@ export function loadMessage ({ state, commit, dispatch }, limit) {
           selects = rs.rows
         }
         if (selects.length > 0) {
-          commit('insertMessages', [...selects].reverse())
+          dispatch('insertMessages', [...selects].reverse())
           resolve(selects)
         } else {
           console.log('empty user')
@@ -542,7 +544,7 @@ export function openDB ({ state }) {
   }
   this._vm.$db = db
   db.transaction((tx) => {
-    tx.executeSql('CREATE TABLE IF NOT EXISTS message (_id, message, convid, fromid, toids, createdAt, updatedAt ,status, recipientStatus, mediaId, mediaType, localFile, thumb, groupId)')
+    tx.executeSql('CREATE TABLE IF NOT EXISTS message (_id, message, convid, fromid, toids, createdAt, updatedAt ,status, recipientStatus, mediaId, mediaType, localFile, thumb, groupId, params)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS conv (message, convid, name, phoneNumber, unreadCount INTEGER DEFAULT 0, updatedAt, imgProfile, isGroup, members, admins, publicKey, privateKey)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS contact (_id, email, name, phoneNumber, country, publickey, imgProfile)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS setting (key, value)')
@@ -750,7 +752,7 @@ export async function addMessage ({ state, commit, dispatch }, data) {
     console.log('update status by addMessage ' + data.uid, resultUpdate)
   } else {
     console.log('insert message :', data)
-    const resultInsert = await dispatch('insertMessage', [data.uid, dText, id, data.from, to, data.createdAt, data.updatedAt, data.status, recipientStatus, data.mediaId, data.mediaType, '', data.thumb, data.groupId])
+    const resultInsert = await dispatch('insertMessage', [data.uid, dText, id, data.from, to, data.createdAt, data.updatedAt, data.status, recipientStatus, data.mediaId, data.mediaType, '', data.thumb, data.groupId, data.params])
     rowId = resultInsert.insertId
   }
   // belum selesai untuk group
@@ -770,7 +772,7 @@ export async function addMessage ({ state, commit, dispatch }, data) {
       })
     } else {
       console.log('add message data', data)
-      commit('addMessage', {
+      dispatch('addMessageToList', {
         message: dText,
         rowid: rowId,
         _id: data.uid,
@@ -782,7 +784,8 @@ export async function addMessage ({ state, commit, dispatch }, data) {
         status: data.status,
         mediaId: data.mediaId,
         mediaType: data.mediaType,
-        thumb: data.thumb
+        thumb: data.thumb,
+        params: data.params
       })
     }
 
@@ -982,7 +985,7 @@ export function readMessage ({ state, commit, dispatch }, data) {
             console.log('status', status, newRecipientStatus)
             tx.executeSql('UPDATE message SET status = ?, recipientStatus = ? WHERE _id = ?', [status, JSON.stringify(newRecipientStatus), uid], (tx, messageResult) => {
               // if (state.currentUserId === data.from) {
-              commit('updateMessage', { ...message, recipientStatus: newRecipientStatus, status: status })
+              commit('updateMessage', { _id: uid, recipientStatus: newRecipientStatus, status: status })
               // }
             })
           }
@@ -1016,15 +1019,16 @@ export function setReadCurrentChat ({ state, commit, dispatch }, data) {
                 to: messages[0].fromid,
                 from: state.user._id,
                 status: 3
+              }).then(() => {
+                db.transaction(function (tx) {
+                  tx.executeSql('UPDATE message SET status = 3 WHERE convid=? and status=2 and fromid!=?', [state.currentUserId, state.user._id], (tx, rs) => {
+                    console.log('update selesai2')
+                  })
+                }, function (tx, error) {
+                  console.log('update status ', tx, error)
+                })
               })
               console.log('update selesai1')
-              db.transaction(function (tx) {
-                tx.executeSql('UPDATE message SET status = 3 WHERE convid=? and status=2 and fromid!=?', [state.currentUserId, state.user._id], (tx, rs) => {
-                  console.log('update selesai2')
-                })
-              }, function (tx, error) {
-                console.log('update status ', tx, error)
-              })
             }
           })
           resolve(true)
@@ -1119,4 +1123,63 @@ export async function uploadFile ({ commit, state, rootState }, { img, type, med
       reject(e)
     })
   })
+}
+
+export async function insertMessages ({ state, commit, dispatch }, selects) {
+  let nS = []
+  for (let index = 0; index < selects.length; index++) {
+    let element = selects[index]
+    try {
+      const params = JSON.parse(element.params)
+      element = { ...element, params }
+      if (params.refId) {
+        const message = await dispatch('getMessageByUID', params.refId)
+        let name = ''
+        if (message.fromid === state.user._id) {
+          name = 'You'
+        } else {
+          const contact = await dispatch('findContactDetail', message.fromid)
+          name = contact.name
+        }
+        element.params = {
+          ...element.params,
+          replyMessage: {
+            ...message,
+            name
+          }
+        }
+      }
+    } catch (error) {
+    }
+    nS = [...nS, element]
+  }
+  commit('insertMessages', [...nS].reverse())
+}
+
+export async function addMessageToList ({ state, commit, dispatch }, element) {
+  console.log('addMessageToList')
+  try {
+    const params = JSON.parse(element.params)
+    element = { ...element, params }
+    if (params.refId) {
+      const message = await dispatch('getMessageByUID', params.refId)
+      let name = ''
+      if (message.fromid === state.user._id) {
+        name = 'You'
+      } else {
+        const contact = await dispatch('findContactDetail', message.fromid)
+        name = contact.name
+      }
+      element.params = {
+        ...element.params,
+        replyMessage: {
+          ...message,
+          name
+        }
+      }
+    }
+  } catch (error) {
+    console.log('addMessageToList', error)
+  }
+  commit('addMessage', element)
 }

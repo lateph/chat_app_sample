@@ -27,7 +27,7 @@ export function getMessageByUID ({ state, commit, dispatch }, uid) {
 export function insertMessage ({ state }, data) {
   return new Promise((resolve, reject) => {
     this._vm.$db.transaction(async (tx) => {
-      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)', data, (tx, result) => {
+      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', data, (tx, result) => {
         resolve(result)
       })
     }, (e) => {
@@ -208,7 +208,7 @@ export function updateConvToZero ({ state, commit, dispatch }, convid) {
   })
 }
 
-export function saveChat ({ state, commit, dispatch, getters }, { text, mediaId, mediaType, localFile, thumb }) {
+export function saveChat ({ state, commit, dispatch, getters }, { text, mediaId, mediaType, localFile, thumb, params }) {
   let to = []
   let group = ''
   const c = getters.currentUser
@@ -223,6 +223,9 @@ export function saveChat ({ state, commit, dispatch, getters }, { text, mediaId,
   } else {
     to = [state.currentUserId]
   }
+  if (!params) {
+    params = {}
+  }
 
   return new Promise((resolve, reject) => {
     this._vm.$db.transaction(async (tx) => {
@@ -230,8 +233,8 @@ export function saveChat ({ state, commit, dispatch, getters }, { text, mediaId,
       const recipientStatus = _.map(to, (e) => {
         return { _id: e, status: 0 }
       })
-      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?,?)', [_uid, text, state.currentUserId, state.user._id, JSON.stringify(to), new Date().toISOString(), new Date().toISOString(), 0, JSON.stringify(recipientStatus), mediaId, mediaType, localFile, thumb, group], (tx, result) => {
-        commit('addMessage', {
+      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?)', [_uid, text, state.currentUserId, state.user._id, JSON.stringify(to), new Date().toISOString(), new Date().toISOString(), 0, JSON.stringify(recipientStatus), mediaId, mediaType, localFile, thumb, group, JSON.stringify(params)], (tx, result) => {
+        dispatch('addMessageToList', {
           message: text,
           rowid: result.insertId,
           _id: _uid,
@@ -243,7 +246,8 @@ export function saveChat ({ state, commit, dispatch, getters }, { text, mediaId,
           localFile,
           thumb,
           mediaId,
-          status: 0
+          status: 0,
+          params: JSON.stringify(params)
         })
       })
     }, (e) => {
