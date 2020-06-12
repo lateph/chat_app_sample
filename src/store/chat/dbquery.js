@@ -295,6 +295,96 @@ export function saveChat ({ state, commit, dispatch, getters }, { text, mediaId,
   })
 }
 
+export async function saveChat2 ({ state, commit, dispatch, getters }, { text, mediaId, mediaType, localFile, thumb, params, convid }) {
+  let to = []
+  let group = ''
+  const c = await dispatch('findConvDetail', convid)
+  if (c.isGroup === true || c.isGroup === 'true') {
+    _.each(c.members, (e) => {
+      if (e._id !== state.user._id) {
+        to.push(e._id)
+      }
+    })
+    group = convid
+  } else {
+    to = [convid]
+  }
+  if (!params) {
+    params = {}
+  }
+
+  return await new Promise((resolve, reject) => {
+    this._vm.$db.transaction(async (tx) => {
+      const _uid = uid()
+      const recipientStatus = _.map(to, (e) => {
+        return { _id: e, status: 0 }
+      })
+      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?)', [_uid, text, convid, state.user._id, JSON.stringify(to), new Date().toISOString(), new Date().toISOString(), 0, JSON.stringify(recipientStatus), mediaId, mediaType, localFile, thumb, group, JSON.stringify(params)], (tx, result) => {
+        if (convid === state.currentUserId) {
+          dispatch('addMessageToList', {
+            message: text,
+            rowid: result.insertId,
+            _id: _uid,
+            contact: convid,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            fromid: state.user._id,
+            mediaType,
+            localFile,
+            thumb,
+            mediaId,
+            status: 0,
+            params: JSON.stringify(params)
+          })
+        }
+      })
+    }, (e) => {
+      reject(e)
+    }, () => {
+      console.log('insert ok')
+      if (!group) {
+        dispatch('findContactDetail', convid).then((c) => {
+          console.log('insert ok 2')
+          dispatch('updateConv', {
+            message: text,
+            convid: convid,
+            name: c.name,
+            phoneNumber: c.phoneNumber,
+            imgProfile: c.imgProfile,
+            updatedAt: new Date().toISOString()
+          }).then(() => {
+            dispatch('updateConvToZero', convid)
+            console.log('insert ok 3')
+            resolve(true)
+          }).catch(e => {
+            console.log(e)
+          })
+        }).catch(e => {
+          console.log(e)
+        })
+      } else {
+        if (String(mediaType) === '11') {
+          text = ''
+        }
+        dispatch('updateConv', {
+          message: text,
+          convid: convid,
+          name: c.name,
+          phoneNumber: '',
+          imgProfile: c.imgProfile,
+          updatedAt: new Date().toISOString()
+        }).then(() => {
+          dispatch('updateConvToZero', convid)
+          console.log('insert ok 3')
+          resolve(true)
+        }).catch(e => {
+          console.log(e)
+        })
+      }
+    })
+  })
+}
+
 export function loadLocalContact ({ state, commit }) {
   console.log('load local contact')
   return new Promise((resolve, reject) => {

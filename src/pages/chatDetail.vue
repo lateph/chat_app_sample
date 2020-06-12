@@ -60,6 +60,12 @@
               @click="reply()"
             />
             <q-btn flat dense icon="delete" v-if="anySelected" @click="deleteChat()"/>
+            <q-btn
+              style="transform: scaleX(-1)"
+              flat dense
+              icon="reply"
+              @click="forward()"
+            />
           </div>
         </div>
 
@@ -91,6 +97,7 @@
               <div class="bg-green-4 absolute-full" style="opacity: 0.3" v-if="message.hightlight" v-on:click="handleHold2(message)"></div>
               <!-- text Only -->
               <div v-if="(!message.mediaType || message.mediaType == '0') && message.status != 4 && message.status != 5" class="bg-green-2 q-pa-xs column q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
+                <div v-if="message.params && message.params.isForward" style="font-style: italic;font-size: 12px" class="text-grey"><q-icon name="reply" color="grey" style="transform: scaleX(-1); margin-bottom: 3px"/>Forwarded</div>
                 <replybox  v-if="message.params && message.params.replyMessage" :message="message.params.replyMessage" class="self-start" @click.native="scrollTo(message)"/>
                 <div class="row">
                   <div class="chatBubble" v-if="message.status != 4 && message.status != 5">{{ message.message }}<span class="text-blue-2" style="margin-left:30px;">|</span></div>
@@ -101,6 +108,7 @@
               </div>
               <!-- Image = type = 1 -->
               <div v-if="message.mediaType == 1 && message.status != 4 && message.status != 5" class="bg-green-2 q-pa-xs flex q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
+                <div v-if="message.params && message.params.isForward" style="font-style: italic;font-size: 12px" class="text-grey"><q-icon name="reply" color="grey" style="transform: scaleX(-1); margin-bottom: 3px"/>Forwarded</div>
                 <img :src="message.localFile" style="max-height: 300px;max-width: 100%; min-width: 150px" v-if="message.mediaType == 1" v-on:click="openFile(message.localFile)">
                 <q-btn unelevated color="green-4" class="q-pa-xs " style="width: 250px;border-radius:6px" v-if="message.mediaType == 2 || message.mediaType == 3" @click="openFile(JSON.parse(message.mediaId).file)">
                   {{ JSON.parse(message.mediaId).name }}
@@ -113,6 +121,7 @@
               </div>
               <!-- other file type type = 2 -->
               <div v-if="message.mediaType == 2 && message.status != 4 && message.status != 5" class="column bg-green-2 q-pa-xs flex q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
+                <div v-if="message.params && message.params.isForward" style="font-style: italic;font-size: 12px" class="text-grey"><q-icon name="reply" color="grey" style="transform: scaleX(-1); margin-bottom: 3px"/>Forwarded</div>
                 <q-btn unelevated color="green-4" class="q-pa-xs " style="width: 250px;border-radius:6px" v-if="message.mediaType == 2 || message.mediaType == 3" @click="openFile(JSON.parse(message.mediaId).file)">
                   {{ JSON.parse(message.mediaId).name }}
                 </q-btn>
@@ -141,6 +150,7 @@
               <div class="bg-green-4 absolute-full" style="opacity: 0.3" v-if="message.hightlight" v-on:click="handleHold2(message)"></div>
               <!-- text Only -->
               <div class="bg-grey-3 q-pa-xs q-ml-xs" style="border-radius: 6px;max-width:80%; min-width:30px;">
+                <div v-if="message.params && message.params.isForward" style="font-style: italic;font-size: 12px" class="text-grey"><q-icon name="reply" color="grey" style="transform: scaleX(-1); margin-bottom: 3px"/>Forwarded</div>
                 <div class="text-weight-medium" v-bind:class="['text-'+message.color]" v-if="message.groupId">{{message.fromContact.name}}</div>
                 <replybox  v-if="message.params && message.params.replyMessage" :message="message.params.replyMessage" class="self-start"  @click.native="scrollTo(message)"/>
                 <div v-if="(!message.mediaType || message.mediaType == '0')  && message.status != 4 && message.status != 5" class="flex justify-between  " style="" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
@@ -452,6 +462,8 @@
         </q-page-container>
       </q-layout>
     </q-dialog>
+
+    <dialogSelectUser ref="userSelect"/>
   </q-layout>
 </template>
 
@@ -464,6 +476,7 @@ import { Dialog, uid } from 'quasar'
 var moment = require('moment')
 import replybox from './replybox.vue'
 import statusbox from './statusbox.vue'
+import dialogSelectUser from './dialogSelectUser.vue'
 
 // import { scroll } from 'quasar'
 // const { getScrollHeight } = scroll
@@ -544,7 +557,8 @@ Vue.component('dynamic-from-now', {
 export default {
   components: {
     replybox,
-    statusbox
+    statusbox,
+    dialogSelectUser
   },
   // name: 'PageName',
   computed: {
@@ -1291,6 +1305,15 @@ export default {
     },
     closeReply () {
       this.replyMessage = null
+    },
+    async forward () {
+      const listTarget = await this.$refs.userSelect.open({
+        exclude: this.$store.state.chat.currentUserId
+      })
+      await this.$store.dispatch('chat/forwardSelected', {
+        listTarget
+      })
+      this.clearSelected()
     }
   }
 }

@@ -855,6 +855,74 @@ export async function deleteSelected ({ commit, state, dispatch }, deleteMeOnly)
   dispatch('syncChat')
 }
 
+export async function forwardSelected ({ commit, state, dispatch }, { listTarget }) {
+  console.log(this.$refs)
+  const params = {
+    isForward: true
+  }
+  try {
+    const list = _.filter(state.dataMessage, { selected: true })
+    for (let j = 0; j < list.length; j++) {
+      const message = list[j]
+      console.log('detail pesan', message)
+      for (let i = 0; i < listTarget.length; i++) {
+        const element = listTarget[i]
+        const mt = String(message.mediaType)
+        if (mt === '0') {
+          try {
+            await dispatch('saveChat2', {
+              text: message.message,
+              mediaType: 0,
+              mediaId: '',
+              localFile: '',
+              params,
+              convid: element._id
+            })
+          } catch (error) {
+            console.log('fail forward', error)
+          }
+        } else if (mt === '1' || mt === '2' || mt === '3') {
+          try {
+            const { file, fileEntry } = await new Promise((resolve, reject) => {
+              window.resolveLocalFileSystemURL(message.localFile, (fileEntry) => {
+                console.log('file entry', fileEntry)
+                fileEntry.file((file) => {
+                  resolve({
+                    file,
+                    fileEntry
+                  })
+                }, function (e) {
+                  reject(e)
+                })
+              }, function (e) {
+                reject(e)
+              })
+            })
+            console.log('fileCordova', file, fileEntry)
+            await dispatch('saveChat2', {
+              text: '',
+              mediaType: parseInt(mt),
+              mediaId: JSON.stringify({
+                file: fileEntry.nativeURL,
+                type: file.type,
+                name: file.name
+              }),
+              localFile: fileEntry.nativeURL,
+              params,
+              convid: element._id
+            })
+          } catch (error) {
+            console.log('error forward file', error)
+          }
+        }
+      }
+    }
+    console.log(listTarget)
+  } catch (error) {
+    console.log('forward cancle')
+  }
+}
+
 export async function downloadMedia ({ state, commit, dispatch }, uid) {
   const message = await dispatch('getMessageByUID', uid)
   console.log('download media id : ', message.mediaId)
@@ -1182,4 +1250,37 @@ export async function addMessageToList ({ state, commit, dispatch }, element) {
     console.log('addMessageToList', error)
   }
   commit('addMessage', element)
+}
+
+export async function findConvDetail ({ state }, convid) {
+  let contact = _.find(state.contacts, { _id: convid })
+  if (!contact) {
+    contact = _.find(state.convs, { convid: convid })
+    if (contact && contact.members) {
+      try {
+        contact.members = JSON.parse(contact.members)
+        contact.admins = JSON.parse(contact.admins)
+        contact.members = _.map(contact.members, (id) => {
+          if (id === state.user._id) {
+            console.log('own user', state.user)
+            return state.user
+          } else {
+            return _.find(state.contacts, { _id: id })
+          }
+        })
+        contact.membersName = _.map(contact.members, (c) => {
+          if (c._id === state.user._id) {
+            return 'you'
+          } else {
+            return c.name
+          }
+        })
+        contact.joinStringMember = _.join(contact.membersName, ', ')
+        console.log('taek', contact.joinStringMember)
+      } catch (error) {
+        console.log('cur err', error)
+      }
+    }
+  }
+  return contact != null ? contact : {}
 }
