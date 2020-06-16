@@ -16,6 +16,7 @@
     "@feathersjs/socketio-client": "^4.5.2",
     "@quasar/extras": "^1.0.0",
     "axios": "^0.19.2",
+    "bson": "^4.0.4",
     "flag-icon-css": "^3.4.6",
     "jwt-js-decode": "^1.4.1",
     "lodash": "^4.17.15",

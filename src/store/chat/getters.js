@@ -1,4 +1,8 @@
 var _ = require('lodash')
+var falsy = /^(?:f(?:alse)?|no?|0+)$/i
+Boolean.parse = function (val) {
+  return !falsy.test(val) && !!val
+}
 
 export function currentUser (state) {
   let contact = _.find(state.contacts, { _id: state.currentUserId })
@@ -8,6 +12,8 @@ export function currentUser (state) {
       try {
         contact.members = JSON.parse(contact.members)
         contact.admins = JSON.parse(contact.admins)
+        contact.isGroup = Boolean.parse(contact.isGroup)
+        contact.isBroadcast = Boolean.parse(contact.isBroadcast)
         contact.members = _.map(contact.members, (id) => {
           if (id === state.user._id) {
             console.log('own user', state.user)

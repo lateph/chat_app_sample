@@ -89,7 +89,8 @@ export default {
       selected: [],
       resolve: null,
       reject: null,
-      exclude: ''
+      exclude: '',
+      group: true
     }
   },
   computed: {
@@ -104,12 +105,15 @@ export default {
             name: e.name
           }
         })
-        const joined = _.map(this.$store.state.chat.convs, e => {
-          return {
-            _id: e.convid,
-            name: e.name
-          }
-        })
+        let joined = []
+        if (this.group) {
+          joined = _.map(this.$store.state.chat.convs, e => {
+            return {
+              _id: e.convid,
+              name: e.name
+            }
+          })
+        }
         return _.filter(_.unionBy(joined, contact, '_id'), (e) => {
           return e._id !== this.exclude
         })
@@ -136,6 +140,9 @@ export default {
       this.selected = []
       if (params.exclude) {
         this.exclude = params.exclude
+      }
+      if (params.group === false) {
+        this.group = params.group
       }
       return new Promise((resolve, reject) => {
         this.resolve = resolve

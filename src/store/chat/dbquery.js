@@ -1,5 +1,9 @@
 import { uid } from 'quasar'
 var _ = require('lodash')
+var falsy = /^(?:f(?:alse)?|no?|0+)$/i
+Boolean.parse = function (val) {
+  return !falsy.test(val) && !!val
+}
 
 export function getMessageByUID ({ state, commit, dispatch }, uid) {
   return new Promise((resolve, reject) => {
@@ -27,7 +31,7 @@ export function getMessageByUID ({ state, commit, dispatch }, uid) {
 export function insertMessage ({ state }, data) {
   return new Promise((resolve, reject) => {
     this._vm.$db.transaction(async (tx) => {
-      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', data, (tx, result) => {
+      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', data, (tx, result) => {
         resolve(result)
       })
     }, (e) => {
@@ -177,7 +181,10 @@ export function updateConv ({ state, commit, dispatch }, data) {
           if (unreadCount === undefined || unreadCount === null) {
             unreadCount = state.currentUserId === data.convid ? 0 : 1
           }
-          tx.executeSql('INSERT INTO conv VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', [data.message, data.convid, data.name, data.phoneNumber, unreadCount, data.updatedAt, data.imgProfile, isGroup, JSON.stringify(members), JSON.stringify(admins), data.publicKey, data.privateKey], (tx, messageResult) => {
+          if (!data.isBroadcast) {
+            data.isBroadcast = ''
+          }
+          tx.executeSql('INSERT INTO conv VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)', [data.message, data.convid, data.name, data.phoneNumber, unreadCount, data.updatedAt, data.imgProfile, isGroup, data.isBroadcast, JSON.stringify(members), JSON.stringify(admins), data.publicKey, data.privateKey], (tx, messageResult) => {
             console.log('loadConv')
             dispatch('loadConv').then(() => {
               resolve(true)
@@ -208,118 +215,68 @@ export function updateConvToZero ({ state, commit, dispatch }, convid) {
   })
 }
 
-export function saveChat ({ state, commit, dispatch, getters }, { text, mediaId, mediaType, localFile, thumb, params }) {
-  let to = []
-  let group = ''
+export async function saveChat ({ state, commit, dispatch, getters }, params) {
   const c = getters.currentUser
-  console.log(getters.currentUser)
-  if (c.isGroup === true || c.isGroup === 'true') {
-    _.each(c.members, (e) => {
-      if (e._id !== state.user._id) {
-        to.push(e._id)
-      }
-    })
-    group = state.currentUserId
-  } else {
-    to = [state.currentUserId]
-  }
-  if (!params) {
-    params = {}
-  }
-
-  return new Promise((resolve, reject) => {
-    this._vm.$db.transaction(async (tx) => {
-      const _uid = uid()
-      const recipientStatus = _.map(to, (e) => {
-        return { _id: e, status: 0 }
+  const _uid = uid()
+  if (c.isBroadcast === true) {
+    console.log('sent to members too', c)
+    for (let i = 0; i < c.members.length; i++) {
+      const element = c.members[i]
+      await dispatch('saveChat2', {
+        ...params,
+        convid: element._id,
+        broadcastId: _uid
       })
-      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?)', [_uid, text, state.currentUserId, state.user._id, JSON.stringify(to), new Date().toISOString(), new Date().toISOString(), 0, JSON.stringify(recipientStatus), mediaId, mediaType, localFile, thumb, group, JSON.stringify(params)], (tx, result) => {
-        dispatch('addMessageToList', {
-          message: text,
-          rowid: result.insertId,
-          _id: _uid,
-          contact: state.currentUserId,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          fromid: state.user._id,
-          mediaType,
-          localFile,
-          thumb,
-          mediaId,
-          status: 0,
-          params: JSON.stringify(params)
-        })
-      })
-    }, (e) => {
-      reject(e)
-    }, () => {
-      console.log('insert ok')
-      if (!group) {
-        dispatch('findContactDetail', state.currentUserId).then((c) => {
-          console.log('insert ok 2')
-          dispatch('updateConv', {
-            message: text,
-            convid: state.currentUserId,
-            name: c.name,
-            phoneNumber: c.phoneNumber,
-            imgProfile: c.imgProfile,
-            updatedAt: new Date().toISOString()
-          }).then(() => {
-            console.log('insert ok 3')
-            resolve(true)
-          }).catch(e => {
-            console.log(e)
-          })
-        }).catch(e => {
-          console.log(e)
-        })
-      } else {
-        if (String(mediaType) === '11') {
-          text = ''
-        }
-        dispatch('updateConv', {
-          message: text,
-          convid: state.currentUserId,
-          name: c.name,
-          phoneNumber: '',
-          imgProfile: c.imgProfile,
-          updatedAt: new Date().toISOString()
-        }).then(() => {
-          console.log('insert ok 3')
-          resolve(true)
-        }).catch(e => {
-          console.log(e)
-        })
-      }
-    })
+    }
+  }
+  return await dispatch('saveChat2', {
+    ...params,
+    convid: state.currentUserId,
+    _uid: _uid
   })
 }
 
-export async function saveChat2 ({ state, commit, dispatch, getters }, { text, mediaId, mediaType, localFile, thumb, params, convid }) {
+export async function saveChat2 ({ state, commit, dispatch, getters }, paramsx) {
   let to = []
   let group = ''
+  console.log('adasdasdad', paramsx)
+  let { text, mediaId, mediaType, localFile, thumb, params, convid, broadcastId, _uid } = paramsx
   const c = await dispatch('findConvDetail', convid)
-  if (c.isGroup === true || c.isGroup === 'true') {
+  const isBroadcast = Boolean.parse(c.isBroadcast)
+  console.log('adasdasdad', c)
+  if (Boolean.parse(c.isGroup) === true) {
     _.each(c.members, (e) => {
       if (e._id !== state.user._id) {
         to.push(e._id)
       }
     })
     group = convid
+  } else if (isBroadcast) {
+    _.each(c.members, (e) => {
+      if (e._id !== state.user._id) {
+        to.push(e._id)
+      }
+    })
+    // group = convid
   } else {
     to = [convid]
   }
   if (!params) {
     params = {}
   }
+  if (!broadcastId) {
+    broadcastId = ''
+  }
+  if (!_uid) {
+    _uid = uid()
+  }
 
   return await new Promise((resolve, reject) => {
     this._vm.$db.transaction(async (tx) => {
-      const _uid = uid()
       const recipientStatus = _.map(to, (e) => {
         return { _id: e, status: 0 }
       })
-      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?)', [_uid, text, convid, state.user._id, JSON.stringify(to), new Date().toISOString(), new Date().toISOString(), 0, JSON.stringify(recipientStatus), mediaId, mediaType, localFile, thumb, group, JSON.stringify(params)], (tx, result) => {
+      tx.executeSql('INSERT INTO message VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?)', [_uid, text, convid, state.user._id, JSON.stringify(to), new Date().toISOString(), new Date().toISOString(), 0, JSON.stringify(recipientStatus), mediaId, mediaType, localFile, thumb, group, JSON.stringify(params), broadcastId], (tx, result) => {
         if (convid === state.currentUserId) {
           dispatch('addMessageToList', {
             message: text,
@@ -342,7 +299,7 @@ export async function saveChat2 ({ state, commit, dispatch, getters }, { text, m
       reject(e)
     }, () => {
       console.log('insert ok')
-      if (!group) {
+      if (!group && isBroadcast) {
         dispatch('findContactDetail', convid).then((c) => {
           console.log('insert ok 2')
           dispatch('updateConv', {

@@ -5,8 +5,12 @@ export function someAction (context) {
 var _ = require('lodash')
 var db = null
 import { LocalStorage } from 'quasar'
+const bson = require('bson')
 import { jwtDecode } from 'jwt-js-decode'
-
+var falsy = /^(?:f(?:alse)?|no?|0+)$/i
+Boolean.parse = function (val) {
+  return !falsy.test(val) && !!val
+}
 // signup action
 export async function doSignup ({ state }, { email, password, nameId, country, phoneNumber }) {
   return this._vm.$appFeathers.service('users').create({
@@ -229,13 +233,16 @@ export async function sendChat ({ state, dispatch, getters }, { text, localFile,
 
 export async function sendPendingChat ({ dispatch }) {
   db.transaction((tx) => {
-    tx.executeSql('SELECT * FROM message WHERE status = ?', [0], (tx, messageResult) => {
+    tx.executeSql('select message.*, conv.isBroadcast, conv.isGroup from message left join conv on message.convid = conv.convid WHERE message.status = ?', [0], (tx, messageResult) => {
       let selects = messageResult.rows._array
       if (!selects) {
         selects = messageResult.rows
       }
       if (selects.length > 0) {
         _.forEach(selects, (r) => {
+          if (r.isBroadcast) {
+            return
+          }
           dispatch('sendChat', {
             text: r.message,
             convid: r.convid,
@@ -247,6 +254,8 @@ export async function sendPendingChat ({ dispatch }) {
             uid: r._id,
             groupId: r.groupId,
             params: r.params,
+            isGroup: Boolean.parse(r.isGroup),
+            isBroadcast: Boolean.parse(r.isBroadcast),
             to: JSON.parse(r.toids)
           })
         })
@@ -544,13 +553,14 @@ export function openDB ({ state }) {
   }
   this._vm.$db = db
   db.transaction((tx) => {
-    tx.executeSql('CREATE TABLE IF NOT EXISTS message (_id, message, convid, fromid, toids, createdAt, updatedAt ,status, recipientStatus, mediaId, mediaType, localFile, thumb, groupId, params)')
-    tx.executeSql('CREATE TABLE IF NOT EXISTS conv (message, convid, name, phoneNumber, unreadCount INTEGER DEFAULT 0, updatedAt, imgProfile, isGroup, members, admins, publicKey, privateKey)')
+    tx.executeSql('CREATE TABLE IF NOT EXISTS message (_id, message, convid, fromid, toids, createdAt, updatedAt ,status, recipientStatus, mediaId, mediaType, localFile, thumb, groupId, params, broadcastId)')
+    tx.executeSql('CREATE TABLE IF NOT EXISTS conv (message, convid, name, phoneNumber, unreadCount INTEGER DEFAULT 0, updatedAt, imgProfile, isGroup, isBroadcast, members, admins, publicKey, privateKey)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS contact (_id, email, name, phoneNumber, country, publickey, imgProfile)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS setting (key, value)')
     tx.executeSql('CREATE INDEX IF NOT EXISTS convididx ON message (convid)')
+    tx.executeSql('CREATE INDEX IF NOT EXISTS broadcastIdx ON message (broadcastId)')
     tx.executeSql('CREATE INDEX IF NOT EXISTS _ididx ON message (_id)')
-    tx.executeSql('CREATE UNIQUE INDEX IF NOT EXISTS phoneNumber ON contact (phoneNumber)')
+    tx.executeSql('CREATE UNIQUE INDEX IF NOT EXISTS _idc ON contact (_id)')
   }, (error) => {
     console.log('Transaction ERROR: ' + error.message)
   }, () => {
@@ -561,7 +571,9 @@ export function openDB ({ state }) {
 export async function findContactDetail ({ state, dispatch, commit }, id) {
   let c = _.find(state.contacts, c => c._id === id)
   if (!c) {
+    console.log('not fond ?', id)
     const data = await this._vm.$appFeathers.service('users').find({ query: { _id: id } })
+    console.log('not fond ?', data, id)
     const key = await this._vm.$appFeathers.service('userkey').find({ query: { userId: data.data[0]._id } })
     c = data.data[0]
     c.publicKey = key.publicKey || key.data[0].publicKey
@@ -738,7 +750,7 @@ export async function addMessage ({ state, commit, dispatch }, data) {
   // reason is to support send message while offline
   const dataExists = await dispatch('getMessageByUID', data.uid)
   const to = JSON.stringify(data.to)
-  console.log('check done')
+  console.log('check done', dataExists)
 
   let rowId = ''
   if (dataExists) {
@@ -748,11 +760,27 @@ export async function addMessage ({ state, commit, dispatch }, data) {
       recipientStatus,
       uid: data.uid
     })
+    if (dataExists.broadcastId) {
+      // harse update readevent
+      _.each(data.recipientStatus, (e) => {
+        dispatch('readMessage', {
+          // status: data.status,
+          // recipientStatus,
+          // uid: data.uid
+          // createdAt: "2020-06-16T04:55:21.154Z"
+          from: e._id,
+          status: data.status,
+          // to: "5ec228aaf74c57667e1d5aa3"
+          uids: [dataExists.broadcastId]
+          // updatedAt: "2020-06-16T04:55:21.154Z"
+        })
+      })
+    }
     rowId = dataExists.rowId
     console.log('update status by addMessage ' + data.uid, resultUpdate)
   } else {
     console.log('insert message :', data)
-    const resultInsert = await dispatch('insertMessage', [data.uid, dText, id, data.from, to, data.createdAt, data.updatedAt, data.status, recipientStatus, data.mediaId, data.mediaType, '', data.thumb, data.groupId, data.params])
+    const resultInsert = await dispatch('insertMessage', [data.uid, dText, id, data.from, to, data.createdAt, data.updatedAt, data.status, recipientStatus, data.mediaId, data.mediaType, '', data.thumb, data.groupId, data.params, ''])
     rowId = resultInsert.insertId
   }
   // belum selesai untuk group
@@ -1043,6 +1071,26 @@ export function readMessage ({ state, commit, dispatch }, data) {
           }
           if (selects.length > 0) {
             const message = selects[0]
+            console.log('message to update', message)
+            try {
+              if (message.broadcastId) {
+                console.log('read message braodcastid', message)
+                dispatch('readMessage', {
+                  // status: data.status,
+                  // recipientStatus,
+                  // uid: data.uid
+                  // createdAt: "2020-06-16T04:55:21.154Z"
+                  from: data.from,
+                  status: data.status,
+                  // to: "5ec228aaf74c57667e1d5aa3"
+                  uids: [message.broadcastId]
+                  // updatedAt: "2020-06-16T04:55:21.154Z"
+                })
+              }
+            } catch (error) {
+              console.log(error)
+            }
+
             var newRecipientStatus = JSON.parse(message.recipientStatus)
 
             var match = _.find(newRecipientStatus, { _id: data.from })
@@ -1050,7 +1098,6 @@ export function readMessage ({ state, commit, dispatch }, data) {
             newRecipientStatus.splice(index, 1, { ...match, status: match.status > data.status ? match.status : data.status })
 
             const status = _.minBy(newRecipientStatus, o => o.status).status
-            console.log('status', status, newRecipientStatus)
             tx.executeSql('UPDATE message SET status = ?, recipientStatus = ? WHERE _id = ?', [status, JSON.stringify(newRecipientStatus), uid], (tx, messageResult) => {
               // if (state.currentUserId === data.from) {
               commit('updateMessage', { _id: uid, recipientStatus: newRecipientStatus, status: status })
@@ -1062,7 +1109,7 @@ export function readMessage ({ state, commit, dispatch }, data) {
     }, (error) => {
       console.log('Transaction ERROR: ' + error.message)
     }, () => {
-      console.log('message saved OK')
+      console.log('message status saved OK')
     })
   }
 }
@@ -1283,4 +1330,30 @@ export async function findConvDetail ({ state }, convid) {
     }
   }
   return contact != null ? contact : {}
+}
+
+export async function createBroadCast ({ state, dispatch }, members) {
+  let data = []
+  for (let index = 0; index < members.length; index++) {
+    const element = members[index]
+    console.log(element)
+    const contact = await dispatch('findContactDetail', element._id)
+    data = [...data, contact.name]
+  }
+  console.log(new bson.ObjectId().toString())
+  return await dispatch('updateConv', {
+    message: '',
+    convid: new bson.ObjectId(),
+    name: _.join(data, ', '),
+    phoneNumber: '',
+    updatedAt: new Date().toISOString(),
+    imgProfile: '',
+    isGroup: false,
+    isBroadcast: true,
+    members: _.map(members, e => e._id),
+    admins: [],
+    publicKey: '',
+    privateKey: '',
+    unreadCount: 0
+  })
 }

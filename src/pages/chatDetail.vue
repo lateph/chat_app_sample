@@ -12,7 +12,10 @@
               </q-avatar>
             </div>
             <div>
-              <div class="text-weight-medium">
+              <div class="text-weight-medium" v-if="$store.getters['chat/currentUser'].isBroadcast">
+                {{ $store.getters['chat/currentUser'].members.length }} recipients
+              </div>
+              <div class="text-weight-medium" v-if="!$store.getters['chat/currentUser'].isBroadcast">
                 {{ $store.getters['chat/currentUser'].name }}
               </div>
               <div style="font-size:11px; margin-top: -3px;" v-if="$store.state.chat.onlineUser &&  $store.state.chat.onlineUser.status">
@@ -103,7 +106,7 @@
                   <div class="chatBubble" v-if="message.status != 4 && message.status != 5">{{ message.message }}<span class="text-blue-2" style="margin-left:30px;">|</span></div>
                   <div class="chatBubble deleted" v-if="message.status == 4 || message.status == 5">This Message Was Deleted<span class="text-blue-2" style="margin-left:30px;">|</span></div>
 
-                  <statusbox :message="message" />
+                  <statusbox :message="message" :broadcast="true"/>
                 </div>
               </div>
               <!-- Image = type = 1 -->
@@ -617,7 +620,8 @@ export default {
         if (!this.$store.getters['chat/currentUser'].isGroup) {
           return false
         } else {
-          return _.findIndex(this.$store.getters['chat/currentUser'].members, (x) => x._id === this.$store.state.chat.user._id) === -1
+          return false
+          // return _.findIndex(this.$store.getters['chat/currentUser'].members, (x) => x._id === this.$store.state.chat.user._id) === -1
         }
       }
     }

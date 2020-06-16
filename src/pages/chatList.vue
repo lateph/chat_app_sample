@@ -11,6 +11,9 @@
           <q-btn flat dense icon="more_vert">
             <q-menu>
               <q-list style="min-width: 100px">
+                <q-item clickable v-close-popup @click="broadcast()">
+                  <q-item-section>New Broadcast</q-item-section>
+                </q-item>
                 <q-item clickable v-close-popup @click="logout()">
                   <q-item-section>Logout</q-item-section>
                 </q-item>
@@ -29,8 +32,10 @@
         <q-list bordered>
           <q-item v-for="conv in convs" :key="conv.rowid" class="q-my-sm" clickable v-ripple  @click="$router.push('/detail/'+conv.convid)">
             <q-item-section avatar>
-              <q-avatar color="primary" text-color="white">
+              <q-avatar color="primary" text-color="white" v-if="!conv.isBroadcast">
                  {{ conv.name.substring(0,1).toUpperCase() }}
+              </q-avatar>
+              <q-avatar color="primary" text-color="white" v-if="conv.isBroadcast" icon="volume_up">
               </q-avatar>
             </q-item-section>
 
@@ -101,11 +106,18 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <dialogSelectUser ref="userSelect"/>
   </q-layout>
 </template>
 
 <script>
+import dialogSelectUser from './dialogSelectUser.vue'
+
 export default {
+  components: {
+    dialogSelectUser
+  },
   // name: 'PageName',
   data: function () {
     return {
@@ -140,6 +152,17 @@ export default {
       } catch (error) {
         console.log(error)
         this.loading = false
+      }
+    },
+    async broadcast () {
+      try {
+        const listTarget = await this.$refs.userSelect.open({
+          group: false
+        })
+        const bc = await this.$store.dispatch('chat/createBroadCast', listTarget)
+        console.log('listTarget', bc)
+      } catch (error) {
+        console.log('batal', error)
       }
     },
     startMessage () {

@@ -2,6 +2,7 @@
   <div class="row self-end q-pt-xs" style="font-size: 10px;margin-left: auto">
     <div class="row justify-center">
       <div class="row items-center">
+        <q-icon name="volume_up" style="font-size: 14px;" color="grey-14" v-if="message.broadcastId && broadcast"/>
         <dynamic-from-now  class="q-mr-xs" :value="message.createdAt"></dynamic-from-now >
         <q-icon name="schedule" style="font-size: 14px;" color="grey-14" v-if="message.status == 0"/>
         <q-icon name="done" style="font-size: 18px;" v-if="message.status == 1"/>
@@ -18,7 +19,7 @@
 
 <script>
 export default {
-  props: ['message'],
+  props: ['message', 'broadcast'],
   name: 'PageIndex'
 }
 </script>
