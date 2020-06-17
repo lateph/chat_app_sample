@@ -544,7 +544,7 @@ export function openDB ({ state }) {
   }
   this._vm.$db = db
   db.transaction((tx) => {
-    tx.executeSql('CREATE TABLE IF NOT EXISTS message (_id, message, convid, fromid, toids, createdAt, updatedAt ,status, recipientStatus, mediaId, mediaType, localFile, thumb, groupId, params, broadcastId)')
+    tx.executeSql('CREATE TABLE IF NOT EXISTS message (_id, message, convid, fromid, toids, createdAt, updatedAt ,status INTEGER, recipientStatus, mediaId, mediaType INTEGER, localFile, thumb, groupId, params, broadcastId)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS conv (message, convid, name, phoneNumber, unreadCount INTEGER DEFAULT 0, updatedAt, imgProfile, isGroup, isBroadcast, members, admins, publicKey, privateKey)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS contact (_id, email, name, phoneNumber, country, publickey, imgProfile)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS setting (key, value)')
@@ -1081,8 +1081,12 @@ export function readMessage ({ state, commit, dispatch }, data) {
             } catch (error) {
               console.log(error)
             }
-            console.log('jancok ile')
-            var newRecipientStatus = JSON.parse(message.recipientStatus)
+            console.log('jancok ile', message)
+            var newRecipientStatus = []
+            try {
+              newRecipientStatus = JSON.parse(message.recipientStatus)
+            } catch (error) {
+            }
             let status = 3
             if (newRecipientStatus.length > 0) {
               var match = _.find(newRecipientStatus, { _id: data.from })
@@ -1297,7 +1301,7 @@ export async function addMessageToList ({ state, commit, dispatch }, element) {
       }
     }
   } catch (error) {
-    console.log('addMessageToList', error)
+    // console.log('addMessageToList', error)
   }
   commit('addMessage', element)
 }

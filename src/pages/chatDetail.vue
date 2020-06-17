@@ -615,8 +615,8 @@ export default {
         if (!this.$store.getters['chat/currentUser'].isGroup) {
           return false
         } else {
-          return false
-          // return _.findIndex(this.$store.getters['chat/currentUser'].members, (x) => x._id === this.$store.state.chat.user._id) === -1
+          // return false
+          return _.findIndex(this.$store.getters['chat/currentUser'].members, (x) => x._id === this.$store.state.chat.user._id) === -1
         }
       }
     }

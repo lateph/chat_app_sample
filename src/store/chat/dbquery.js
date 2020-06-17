@@ -543,10 +543,12 @@ export async function removeMemberFromMessage ({ state, commit, dispatch }, { me
   console.log('removeMemberFromMessage', convid)
   const list = await new Promise((resolve, reject) => {
     this._vm.$db.transaction(function (tx) {
-      tx.executeSql('SELECT * FROM message WHERE convid=? and status < 3 ORDER BY createdAt', [convid], (tx, rs) => {
+      tx.executeSql('SELECT * FROM message WHERE convid=? and status < 3 and mediaType < 11 and fromid = ? ORDER BY createdAt', [convid, state.user._id], (tx, rs) => {
         let selects = rs.rows._array
         if (!selects) {
-          selects = rs.rows
+          selects = _.filter(rs.rows, (e) => {
+            return parseInt(e.status) < 3
+          })
         }
         if (selects.length > 0) {
           resolve(selects)
@@ -570,6 +572,8 @@ export async function removeMemberFromMessage ({ state, commit, dispatch }, { me
       // to: "5ec228aaf74c57667e1d5aa3"
       uids: [e._id]
       // updatedAt: "2020-06-16T04:55:21.154Z"
+    }).catch((e) => {
+      console.log('gagal change status', e)
     })
   })
 }
