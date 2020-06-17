@@ -66,7 +66,6 @@ export async function doLoginJwt ({ state, dispatch, commit }, { jwt }) {
   commit('user', message.user)
 
   await dispatch('openDB')
-  console.log('message', message)
   message.user.name = message.user.nameId
   dispatch('setSetting', {
     key: 'user',
@@ -84,7 +83,6 @@ export async function doLoginJwt ({ state, dispatch, commit }, { jwt }) {
 
 export async function localDataLoad ({ state, dispatch, commit }, { jwt }) {
   const decode = jwtDecode(jwt)
-  console.log('localDataLoad', decode)
 
   commit('user', {
     _id: decode.payload.sub
@@ -94,7 +92,6 @@ export async function localDataLoad ({ state, dispatch, commit }, { jwt }) {
   const user = await dispatch('getSetting', {
     key: 'user'
   })
-  console.log(user)
   commit('user', JSON.parse(user))
   console.log('user decodde', decode)
   await dispatch('loadKey')
@@ -116,7 +113,6 @@ export async function doLogout ({ commit }) {
 
 export function updateToken ({ state, commit }, userId) {
   return new Promise((resolve, reject) => {
-    console.log('update token start', userId)
     if (!window.cordova) {
       resolve(true)
       return
@@ -204,14 +200,10 @@ export async function sendChat ({ state, dispatch, getters }, { text, localFile,
     publicKey = await dispatch('getPublicKey', convid)
   }
 
-  console.log('pubkey', publicKey)
-
   const encText = await dispatch('encryptChatMessage', {
     text,
     publicKey: publicKey
   })
-
-  console.log(encText)
 
   const retMessage = await this._vm.$appFeathers.service('messages').create({
     from: state.user._id,
@@ -357,7 +349,6 @@ export function loadConv ({ state, commit, dispatch }) {
 */
 export async function syncChat ({ state, commit, dispatch }) {
   const deleteMessage = await dispatch('getUnsentDeleteMessage')
-  console.log('message to delete', deleteMessage)
   _.forEach(deleteMessage, async message => {
     const to = JSON.parse(message.toids)
     if (to.length > 0) {
@@ -376,7 +367,7 @@ export async function syncChat ({ state, commit, dispatch }) {
   })
 
   const data = await this._vm.$appFeathers.service('messages').find({ query: { $limit: 1000, $sort: { createdAt: 1 }, to: { $in: [state.user._id] } } })
-  console.log('new chat total', data.data.length)
+  // console.log('new chat total', data.data.length)
   const p = _.partition(data.data, (o) => { return o.from })
   _.forEach(p, async messages => {
     if (messages.length > 0) {
@@ -392,9 +383,9 @@ export async function syncChat ({ state, commit, dispatch }) {
   for (let index = 0; index < data.data.length; index++) {
     const r = data.data[index]
     try {
-      console.log('addmessage 1', r)
+      // console.log('addmessage 1', r)
       await dispatch('addMessage', { ...r, status: 2 })
-      console.log('addmessage 2')
+      // console.log('addmessage 2')
       dispatch('setReceive', r)
     } catch (error) {
       dispatch('setReceive', r)
@@ -413,7 +404,7 @@ export async function syncChat ({ state, commit, dispatch }) {
 
 export async function syncGroup ({ state, commit, dispatch }) {
   const data = await this._vm.$appFeathers.service('group').find({ query: { $limit: 1000, $sort: { createdAt: 1 }, members: { $in: [state.user._id] } } })
-  console.log('list group', data.data.length)
+  // console.log('list group', data.data.length)
 
   for (let index = 0; index < data.data.length; index++) {
     const r = data.data[index]
@@ -564,7 +555,7 @@ export function openDB ({ state }) {
   }, (error) => {
     console.log('Transaction ERROR: ' + error.message)
   }, () => {
-    console.log('create database OK')
+    // console.log('create database OK')
   })
 }
 
@@ -681,15 +672,15 @@ export async function newGroup ({ state, dispatch, commit }, group) {
 }
 
 export async function addMessage ({ state, commit, dispatch }, data) {
-  console.log('saving message :', data)
+  // console.log('saving message :', data)
   // get lawan chat
-  console.log('addMessage mulai', data)
+  // console.log('addMessage mulai', data)
 
   let id = ''
   let recipientStatus = ''
   let dText = ''
 
-  console.log('contactDetail', data)
+  // console.log('contactDetail', data)
 
   if (data.from === state.user._id) {
     console.log('addMessage sama')
@@ -780,7 +771,7 @@ export async function addMessage ({ state, commit, dispatch }, data) {
     console.log('update status by addMessage ' + data.uid, resultUpdate)
   } else {
     console.log('insert message :', data)
-    const resultInsert = await dispatch('insertMessage', [data.uid, dText, id, data.from, to, data.createdAt, data.updatedAt, data.status, recipientStatus, data.mediaId, data.mediaType, '', data.thumb, data.groupId, data.params, ''])
+    const resultInsert = await dispatch('insertMessage', [data.uid, dText, id, data.from, to, data.createdAt, data.updatedAt, 2, recipientStatus, data.mediaId, data.mediaType, '', data.thumb, data.groupId, data.params, ''])
     rowId = resultInsert.insertId
   }
   // belum selesai untuk group
@@ -1090,14 +1081,26 @@ export function readMessage ({ state, commit, dispatch }, data) {
             } catch (error) {
               console.log(error)
             }
-
+            console.log('jancok ile')
             var newRecipientStatus = JSON.parse(message.recipientStatus)
-
-            var match = _.find(newRecipientStatus, { _id: data.from })
-            var index = _.findIndex(newRecipientStatus, { _id: data.from })
-            newRecipientStatus.splice(index, 1, { ...match, status: match.status > data.status ? match.status : data.status })
-
-            const status = _.minBy(newRecipientStatus, o => o.status).status
+            let status = 3
+            if (newRecipientStatus.length > 0) {
+              var match = _.find(newRecipientStatus, { _id: data.from })
+              if (match) {
+                var index = _.findIndex(newRecipientStatus, { _id: data.from })
+                newRecipientStatus.splice(index, 1, { ...match, status: match.status > data.status ? match.status : data.status })
+              }
+              const filter = _.filter(newRecipientStatus, (e) => {
+                return e.status !== 6
+              })
+              if (filter.length > 0) {
+                status = _.minBy(filter, o => o.status).status
+              } else {
+                status = 3
+              }
+            } else {
+              status = 3
+            }
             tx.executeSql('UPDATE message SET status = ?, recipientStatus = ? WHERE _id = ?', [status, JSON.stringify(newRecipientStatus), uid], (tx, messageResult) => {
               // if (state.currentUserId === data.from) {
               commit('updateMessage', { _id: uid, recipientStatus: newRecipientStatus, status: status })

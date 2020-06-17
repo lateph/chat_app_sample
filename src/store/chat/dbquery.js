@@ -143,9 +143,23 @@ export function updateConv ({ state, commit, dispatch }, data) {
           const conv = selects[0]
           // console.log('mulai update conv')
           let members = data.members
+          const jsonConvMembers = JSON.parse(conv.members)
           if (!members) {
-            members = JSON.parse(conv.members)
+            members = jsonConvMembers
           }
+          console.log('update members', conv, members)
+          if (jsonConvMembers.length > members.length) {
+            console.log('update all message karena ada yang dihapus')
+            _.forEach(_.difference(jsonConvMembers, members), (e) => {
+              dispatch('removeMemberFromMessage', {
+                member: e,
+                convid: conv.convid
+              }).catch(e => {
+                console.log('%c error remove mmeber ', 'background: #222; color: red', e)
+              })
+            })
+          }
+
           let admins = data.admins
           if (!admins) {
             admins = JSON.parse(conv.admins)
@@ -239,11 +253,9 @@ export async function saveChat ({ state, commit, dispatch, getters }, params) {
 export async function saveChat2 ({ state, commit, dispatch, getters }, paramsx) {
   let to = []
   let group = ''
-  console.log('adasdasdad', paramsx)
   let { text, mediaId, mediaType, localFile, thumb, params, convid, broadcastId, _uid } = paramsx
   const c = await dispatch('findConvDetail', convid)
   const isBroadcast = Boolean.parse(c.isBroadcast)
-  console.log('adasdasdad', c)
   if (Boolean.parse(c.isGroup) === true) {
     _.each(c.members, (e) => {
       if (e._id !== state.user._id) {
@@ -299,7 +311,7 @@ export async function saveChat2 ({ state, commit, dispatch, getters }, paramsx) 
       reject(e)
     }, () => {
       console.log('insert ok')
-      if (!group && isBroadcast) {
+      if (!group && !isBroadcast) {
         dispatch('findContactDetail', convid).then((c) => {
           console.log('insert ok 2')
           dispatch('updateConv', {
@@ -311,7 +323,6 @@ export async function saveChat2 ({ state, commit, dispatch, getters }, paramsx) 
             updatedAt: new Date().toISOString()
           }).then(() => {
             dispatch('updateConvToZero', convid)
-            console.log('insert ok 3')
             resolve(true)
           }).catch(e => {
             console.log(e)
@@ -332,7 +343,6 @@ export async function saveChat2 ({ state, commit, dispatch, getters }, paramsx) 
           updatedAt: new Date().toISOString()
         }).then(() => {
           dispatch('updateConvToZero', convid)
-          console.log('insert ok 3')
           resolve(true)
         }).catch(e => {
           console.log(e)
@@ -343,7 +353,6 @@ export async function saveChat2 ({ state, commit, dispatch, getters }, paramsx) 
 }
 
 export function loadLocalContact ({ state, commit }) {
-  console.log('load local contact')
   return new Promise((resolve, reject) => {
     this._vm.$db.transaction(function (tx) {
       tx.executeSql('SELECT rowid, _id, email, name, phoneNumber, country, imgProfile FROM contact WHERE publickey != ?', [''], (tx, rs) => {
@@ -526,6 +535,41 @@ export function getGroupData ({ commit }, _id) {
       reject('group data not found 2 ' + _id)
     }, () => {
       // reject(false)
+    })
+  })
+}
+
+export async function removeMemberFromMessage ({ state, commit, dispatch }, { member, convid }) {
+  console.log('removeMemberFromMessage', convid)
+  const list = await new Promise((resolve, reject) => {
+    this._vm.$db.transaction(function (tx) {
+      tx.executeSql('SELECT * FROM message WHERE convid=? and status < 3 ORDER BY createdAt', [convid], (tx, rs) => {
+        let selects = rs.rows._array
+        if (!selects) {
+          selects = rs.rows
+        }
+        if (selects.length > 0) {
+          resolve(selects)
+        } else {
+          reject('loadMessage empty')
+        }
+      }, function (tx, error) {
+        reject(error)
+      })
+    })
+  })
+  console.log('list to update', list, member)
+  _.forEach(list, (e) => {
+    dispatch('readMessage', {
+      // status: data.status,
+      // recipientStatus,
+      // uid: data.uid
+      // createdAt: "2020-06-16T04:55:21.154Z"
+      from: member,
+      status: 6,
+      // to: "5ec228aaf74c57667e1d5aa3"
+      uids: [e._id]
+      // updatedAt: "2020-06-16T04:55:21.154Z"
     })
   })
 }

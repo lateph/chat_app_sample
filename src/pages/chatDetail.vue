@@ -492,14 +492,11 @@ var Clock = new Vue({
   methods: {
     start () {
       this.interval = setInterval(this.emit, 10000)
-      console.log('start interval ', this.interval)
     },
     emit () {
-      console.log('tick')
       this.$emit('tick')
     },
     register (cb) {
-      console.log('register')
       if (!cb) return
       if (this.listeners === 0) {
         this.start()
@@ -510,10 +507,8 @@ var Clock = new Vue({
     unregister (cb) {
       if (!cb) return
       this.listeners--
-      console.log('unregister', this.listeners)
       this.$off('tick', cb)
       if (this.listeners === 0) {
-        console.log('clear interval', this.interval)
         clearInterval(this.interval)
       }
     }

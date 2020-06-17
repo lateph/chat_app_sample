@@ -67,19 +67,13 @@ export async function genKeyPair ({ state, dispatch }) {
 
 export async function loadKey ({ commit, dispatch }) {
   let privateKey = ''
-  console.log(1)
   try {
-    console.log(2)
     privateKey = await dispatch('getSetting', {
       key: 'privatekey'
     })
-    console.log(22, privateKey)
     privateKey = JSON.parse(privateKey)
-    console.log(23)
   } catch (error) {
-    console.log(3)
     privateKey = await dispatch('genKeyPair')
-    console.log(32)
   }
   commit('setPrivatekey', privateKey)
 }
