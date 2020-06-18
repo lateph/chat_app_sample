@@ -89,7 +89,7 @@ export default {
       selected: [],
       resolve: null,
       reject: null,
-      exclude: '',
+      exclude: [],
       group: true
     }
   },
@@ -114,8 +114,9 @@ export default {
             }
           })
         }
+        console.log('exclude', this.exclude)
         return _.filter(_.unionBy(joined, contact, '_id'), (e) => {
-          return e._id !== this.exclude
+          return _.findIndex(this.exclude, (ex) => ex === e._id) === -1
         })
         // return contact
       }

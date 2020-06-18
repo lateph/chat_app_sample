@@ -169,7 +169,7 @@
                     class="row justify-end q-pt-xs"
                     style="font-size: 10px;margin-left: auto"
                   >
-                    <div>{{ message.createdAt  | moment("from", "now") }}</div>
+                    <dynamic-from-now  :value="message.createdAt"></dynamic-from-now >
                   </div>
                 </div>
                 <!-- Image = type = 1 -->
@@ -196,7 +196,7 @@
                   <div
                     class="row justify-end q-pt-xs absolute" style="font-size: 10px;bottom: 10px;right:10px"
                   >
-                    <div class="text-white">{{ message.createdAt  | moment("from", "now") }}</div>
+                    <dynamic-from-now  class="text-white" :value="message.createdAt"></dynamic-from-now >
                   </div>
                 </div>
                 <!-- other = type = 2 -->
@@ -214,7 +214,7 @@
                     class="row justify-end q-pt-xs"
                     style="font-size: 10px;margin-left: auto"
                   >
-                    <div>{{ message.createdAt  | moment("from", "now") }}</div>
+                    <dynamic-from-now  :value="message.createdAt"></dynamic-from-now >
                   </div>
                 </div>
                 <div v-if="message.status == 4 || message.status == 5" class="column flex justify-between" style="" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
@@ -224,7 +224,7 @@
                     class="row justify-end q-pt-xs"
                     style="font-size: 10px;margin-left: auto"
                   >
-                    <div>{{ message.createdAt  | moment("from", "now") }}</div>
+                    <dynamic-from-now  :value="message.createdAt"></dynamic-from-now >
                   </div>
                 </div>
               </div>
@@ -326,7 +326,7 @@
           <q-toolbar>
             <q-btn flat @click="groupDetail = false" round dense icon="arrow_back" />
             <q-toolbar-title>{{ $store.getters['chat/currentUser'].name }}</q-toolbar-title>
-            <q-btn flat round dense icon="person_add"  @click="groupDetail = false;groupAdd = true" v-if="isAdmin"/>
+            <q-btn flat round dense icon="person_add"  @click="addToGroupModal()" v-if="isAdmin"/>
           </q-toolbar>
         </q-header>
 
@@ -389,85 +389,6 @@
                 </q-item-section>
               </q-item>
             </q-list>
-          </q-page>
-        </q-page-container>
-      </q-layout>
-    </q-dialog>
-
-    <q-dialog v-model="groupAdd" maximized>
-      <q-layout  class="bg-white">
-        <q-header elevated>
-          <q-toolbar>
-            <q-btn flat dense icon="arrow_back_ios" @click="groupAdd = false" />
-
-            <div class="row items-center justify-between full-width">
-              <div class="row items-center ">
-                <div>
-                  <div class="text-weight-medium">
-                    {{ $store.getters['chat/currentUser'].name }}
-                  </div>
-                  <div style="font-size:11px; margin-top: -3px;">
-                    {{selected.length}} of {{contacts.length}} Selected
-                  </div>
-                </div>
-              </div>
-              <div>
-                <q-btn flat dense icon="more_vert" @click="$router.go(-1)" />
-              </div>
-            </div>
-          </q-toolbar>
-        </q-header>
-
-        <q-page-container>
-          <q-page>
-            <q-scroll-area
-              v-if="selected.length > 0"
-              horizontal
-              style="height: 64px"
-              class="bg-grey-1 rounded-borders"
-            >
-              <div class="row no-wrap">
-                <div v-for="n in selected" :key="n._id" class="q-ma-sm relative-position">
-                  <q-avatar color="primary" text-color="white">
-                    {{ n.email.substring(0,1).toUpperCase() }}
-                  </q-avatar>
-                  <q-icon
-                    size="24px"
-                    color="grey"
-                    name="remove_circle"
-                    class="absolute-bottom-right"
-                  />
-                </div>
-              </div>
-            </q-scroll-area>
-            <q-list bordered>
-                <q-item v-for="contact in contactJoin" :key="contact._id" class="q-my-sm" clickable v-ripple @click="add(contact)">
-                <q-item-section avatar class="relative-position">
-                    <q-avatar color="primary" text-color="white">
-                    {{ contact.email.substring(0,1).toUpperCase() }}
-                    </q-avatar>
-                    <q-icon
-                      size="24px"
-                      color="green"
-                      name="check_circle"
-                      class="absolute-bottom-right"
-                      v-if="contact.selected"
-                    />
-                </q-item-section>
-
-                <q-item-section>
-                    <q-item-label></q-item-label>
-                    <q-item-label caption lines="1">{{ contact.name }}</q-item-label>
-                </q-item-section>
-
-                <q-item-section side>
-                    <!-- <q-icon name="chat_bubble" color="green" /> -->
-                </q-item-section>
-                </q-item>
-            </q-list>
-            <q-page-sticky position="bottom-right" :offset="[18, 18]">
-              <q-btn fab icon="arrow_forward" color="accent"  @click="addToGroup()"/>
-            </q-page-sticky>
           </q-page>
         </q-page-container>
       </q-layout>
@@ -734,14 +655,24 @@ export default {
         // console.log('I am triggered on both OK and Cancel')
       })
     },
-    async addToGroup () {
+    async addToGroupModal () {
+      this.groupDetail = false
+      console.log(this.$store.getters['chat/currentUser'])
+      const excludeId = _.map(this.$store.getters['chat/currentUser'].members, (e) => {
+        return e._id
+      })
+      const listTarget = await this.$refs.userSelect.open({
+        exclude: [this.$store.state.chat.currentUserId, ...excludeId],
+        group: false
+      })
+      console.log(listTarget)
       await this.$store.dispatch('chat/addGroupMember', {
         _id: this.$store.getters['chat/currentUser'].convid,
-        members: _.map(this.selected, e => e._id)
+        members: _.map(listTarget, e => e._id)
       })
 
-      for (let index = 0; index < this.selected.length; index++) {
-        const element = this.selected[index]
+      for (let index = 0; index < listTarget.length; index++) {
+        const element = listTarget[index]
         this.$store.dispatch('chat/saveChat', {
           text: JSON.stringify({
             code: 'add_to_group',
@@ -1317,7 +1248,7 @@ export default {
     },
     async forward () {
       const listTarget = await this.$refs.userSelect.open({
-        exclude: this.$store.state.chat.currentUserId
+        exclude: [this.$store.state.chat.currentUserId]
       })
       await this.$store.dispatch('chat/forwardSelected', {
         listTarget
