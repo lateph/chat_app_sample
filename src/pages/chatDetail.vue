@@ -11,20 +11,27 @@
                 {{  $store.getters['chat/currentUser'] &&  $store.getters['chat/currentUser'].name ? $store.getters['chat/currentUser'].name.substring(0,1).toUpperCase() : '' }}
               </q-avatar>
             </div>
-            <div>
+            <div v-if="$store.getters['chat/currentUser'].isBroadcast">
               <div class="text-weight-medium" v-if="$store.getters['chat/currentUser'].isBroadcast">
                 {{ $store.getters['chat/currentUser'].members.length }} recipients
               </div>
-              <div class="text-weight-medium" v-if="!$store.getters['chat/currentUser'].isBroadcast">
+            </div>
+            <div v-if="$store.getters['chat/currentUser'].isGroup"  @click="groupDetail = true">
+              <div class="text-weight-medium">
+                {{ $store.getters['chat/currentUser'].name }}
+              </div>
+              <div>
+                {{$store.getters['chat/currentUser'].joinStringMember}}
+              </div>
+            </div>
+            <div v-if="!$store.getters['chat/currentUser'].isGroup && !$store.getters['chat/currentUser'].isBroadcast" @click="openDetailUser()">
+              <div class="text-weight-medium">
                 {{ $store.getters['chat/currentUser'].name }}
               </div>
               <div style="font-size:11px; margin-top: -3px;" v-if="$store.state.chat.onlineUser &&  $store.state.chat.onlineUser.status">
                 <div v-if="!$store.getters['chat/currentUser'].isGroup">
                   {{ $store.state.chat.custom && $store.state.chat.custom.text == 'typing' ? 'typing ...' : 'Online' }}
                 </div>
-              </div>
-              <div v-if="$store.getters['chat/currentUser'].isGroup" @click="groupDetail = true">
-                {{$store.getters['chat/currentUser'].joinStringMember}}
               </div>
               <div style="font-size:11px; margin-top: -3px;" v-if="$store.state.chat.onlineUser &&  !$store.state.chat.onlineUser.status">
                 last seen {{ $store.state.chat.onlineUser.lastOnline  | moment("from", "now") }}
@@ -467,6 +474,7 @@
     </q-dialog>
 
     <dialogSelectUser ref="userSelect"/>
+    <userDetail ref="userDetail"/>
   </q-layout>
 </template>
 
@@ -480,6 +488,7 @@ var moment = require('moment')
 import replybox from './replybox.vue'
 import statusbox from './statusbox.vue'
 import dialogSelectUser from './dialogSelectUser.vue'
+import userDetail from './userDetail.vue'
 
 // import { scroll } from 'quasar'
 // const { getScrollHeight } = scroll
@@ -556,7 +565,8 @@ export default {
   components: {
     replybox,
     statusbox,
-    dialogSelectUser
+    dialogSelectUser,
+    userDetail
   },
   // name: 'PageName',
   computed: {
@@ -1313,6 +1323,15 @@ export default {
         listTarget
       })
       this.clearSelected()
+    },
+    async openDetailUser () {
+      try {
+        await this.$refs.userDetail.open({
+          userId: this.$store.state.chat.currentUserId
+        })
+      } catch (error) {
+        console.log('close')
+      }
     }
   }
 }
