@@ -725,16 +725,26 @@ export default {
     },
     async deleteChat () {
       console.log('delete chat')
+      const notMeSelected = _.findIndex(this.$store.getters['chat/messages'], (m) => {
+        return m.selected === true && m.fromid !== this.$store.state.chat.user._id
+      }) > -1
+
+      let items = [
+        { label: 'Delete For Me', value: 'opt1', color: 'secondary' }
+      ]
+      if (!notMeSelected) {
+        items = [
+          ...items,
+          { label: 'Delete For Everyone', value: 'opt2' }
+        ]
+      }
       Dialog.create({
         title: 'Delete Message ?',
         options: {
           type: 'radio',
           model: 'opt1',
           // inline: true
-          items: [
-            { label: 'Delete For Me', value: 'opt1', color: 'secondary' },
-            { label: 'Delete For Everyone', value: 'opt2' }
-          ]
+          items: items
         },
         cancel: true,
         persistent: true
