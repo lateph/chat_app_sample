@@ -5,26 +5,26 @@
         <q-btn flat dense icon="arrow_back_ios" @click="$router.go(-1)" />
 
         <div class="row items-center justify-between full-width">
-          <div class="row items-center ">
-            <div class="q-mr-sm">
+          <div class="fit row wrap  items-start content-start">
+            <div class="q-mr-sm" style="width: 38px;min-width: 38px; max-width: 38px;">
               <q-avatar color="white" text-color="primary">
                 {{  $store.getters['chat/currentUser'] &&  $store.getters['chat/currentUser'].name ? $store.getters['chat/currentUser'].name.substring(0,1).toUpperCase() : '' }}
               </q-avatar>
             </div>
-            <div v-if="$store.getters['chat/currentUser'].isBroadcast">
+            <div  class="col-grow" v-if="$store.getters['chat/currentUser'].isBroadcast" style="overflow: hidden;width: 200px;">
               <div class="text-weight-medium" v-if="$store.getters['chat/currentUser'].isBroadcast">
                 {{ $store.getters['chat/currentUser'].members.length }} recipients
               </div>
             </div>
-            <div v-if="$store.getters['chat/currentUser'].isGroup"  @click="groupDetail = true">
+            <div  class="col-grow" style="overflow: hidden;width: 200px;" v-if="$store.getters['chat/currentUser'].isGroup"  @click="groupDetail = true">
               <div class="text-weight-medium">
                 {{ $store.getters['chat/currentUser'].name }}
               </div>
-              <div>
+              <div style="text-overflow: ellipsis;white-space: nowrap;overflow: hidden;">
                 {{$store.getters['chat/currentUser'].joinStringMember}}
               </div>
             </div>
-            <div v-if="!$store.getters['chat/currentUser'].isGroup && !$store.getters['chat/currentUser'].isBroadcast" @click="openDetailUser()">
+            <div  class="col-grow" style="overflow: hidden;width: 200px;" v-if="!$store.getters['chat/currentUser'].isGroup && !$store.getters['chat/currentUser'].isBroadcast" @click="openDetailUser()">
               <div class="text-weight-medium">
                 {{ $store.getters['chat/currentUser'].name }}
               </div>
@@ -38,22 +38,20 @@
               </div>
             </div>
           </div>
-          <div>
-            <q-btn flat dense icon="more_vert" v-if="$store.getters['chat/currentUser'].isGroup">
-              <q-menu>
-                <q-list style="min-width: 100px">
-                  <q-item clickable v-close-popup @click="logout()">
-                    <q-item-section>Logout</q-item-section>
-                  </q-item>
-                  <q-item clickable v-close-popup @click="syncMain()">
-                    <q-item-section>Sync Contact</q-item-section>
-                  </q-item>
-                </q-list>
-              </q-menu>
-            </q-btn>
-          </div>
         </div>
 
+        <q-btn flat dense icon="more_vert" v-if="$store.getters['chat/currentUser'].isGroup">
+          <q-menu>
+            <q-list style="min-width: 100px">
+              <q-item clickable v-close-popup @click="logout()">
+                <q-item-section>Logout</q-item-section>
+              </q-item>
+              <q-item clickable v-close-popup @click="syncMain()">
+                <q-item-section>Sync Contact</q-item-section>
+              </q-item>
+            </q-list>
+          </q-menu>
+        </q-btn>
       </q-toolbar>
       <q-toolbar  v-if="anySelected" >
         <q-btn flat dense icon="arrow_back_ios" @click="clearSelected()" />
@@ -162,7 +160,7 @@
               <div class="bg-grey-3 q-pa-xs q-ml-xs" style="border-radius: 6px;max-width:80%; min-width:30px;">
                 <div v-if="message.params && message.params.isForward" style="font-style: italic;font-size: 12px" class="text-grey"><q-icon name="reply" color="grey" style="transform: scaleX(-1); margin-bottom: 3px"/>Forwarded</div>
                 <div class="text-weight-medium" v-bind:class="['text-'+message.color]" v-if="message.groupId">{{message.fromContact.name}}</div>
-                <replybox  v-if="message.params && message.params.replyMessage" :message="message.params.replyMessage" class="self-start"  @click.native="scrollTo(message)"/>
+                <replybox  v-if="message.params && message.params.replyMessage && message.status != 4 && message.status != 5" :message="message.params.replyMessage" class="self-start"  @click.native="scrollTo(message)"/>
                 <div v-if="(!message.mediaType || message.mediaType == '0')  && message.status != 4 && message.status != 5" class="flex justify-between  " style="" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
                   <div class="chatBubble" >{{ message.message }}<span class="text-blue-2" style="margin-left:30px;"></span></div>
                   <div
@@ -561,6 +559,10 @@ export default {
     //     alert('new')
     //   }
     // }
+    '$route.params.id': function (id) {
+      this.$store.dispatch('chat/setCurrent', this.$router.currentRoute.params.id)
+      this.firstLoad()
+    }
   },
   data () {
     return {
@@ -586,14 +588,13 @@ export default {
     next()
   },
   mounted () {
-    console.log('scroll area', this.$refs.scrollArea.scrollPosition)
+    console.log('mounted')
     this.$store.dispatch('chat/setCurrent', this.$router.currentRoute.params.id)
 
     this.$store.dispatch('chat/sendPendingChat').then(() => {
     })
 
     this.firstLoad()
-    console.log(this.$socket)
   },
   methods: {
     async removeMember (contact) {
@@ -753,6 +754,12 @@ export default {
       })
     },
     handleHold (index) {
+      console.log(index)
+      const status = parseInt(index.status)
+      const mediaType = parseInt(index.mediaType)
+      if (status === 5 || status === 4 || mediaType >= 10) {
+        return
+      }
       const _t = this
       return function (props) {
         console.log(index, props)
@@ -810,6 +817,12 @@ export default {
       }
     },
     handleHold2 (index) {
+      console.log(index)
+      const status = parseInt(index.status)
+      const mediaType = parseInt(index.mediaType)
+      if (status === 5 || status === 4 || mediaType >= 10) {
+        return
+      }
       const a = _.find(this.$store.getters['chat/messages'], (m) => {
         return m.selected === true
       })
@@ -1250,9 +1263,16 @@ export default {
       const listTarget = await this.$refs.userSelect.open({
         exclude: [this.$store.state.chat.currentUserId]
       })
+      console.log(listTarget)
       await this.$store.dispatch('chat/forwardSelected', {
         listTarget
       })
+      this.$store.dispatch('chat/sendPendingChat').then(() => {
+      })
+      if (listTarget.length > 0) {
+        console.log('redirect', '/detail/' + listTarget[0]._id)
+        this.$router.replace('/detail/' + listTarget[0]._id)
+      }
       this.clearSelected()
     },
     async openDetailUser () {

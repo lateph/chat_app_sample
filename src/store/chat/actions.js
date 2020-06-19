@@ -383,7 +383,7 @@ export async function syncChat ({ state, commit, dispatch }) {
   for (let index = 0; index < data.data.length; index++) {
     const r = data.data[index]
     try {
-      // console.log('addmessage 1', r)
+      console.log('addmessage 1', r)
       await dispatch('addMessage', { ...r, status: 2 })
       // console.log('addmessage 2')
       dispatch('setReceive', r)
