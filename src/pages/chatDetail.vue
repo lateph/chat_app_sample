@@ -131,6 +131,7 @@
                 <q-btn unelevated color="green-4" class="q-pa-xs " style="width: 250px;border-radius:6px" v-if="message.mediaType == 2 || message.mediaType == 3" @click="openFile(JSON.parse(message.mediaId).file)">
                   {{ JSON.parse(message.mediaId).name }}
                 </q-btn>
+                <div class="chatBubble" v-if="message.message && message.status != 4 && message.status != 5">{{ message.message }}<span class="text-blue-2" style="margin-left:30px;"></span></div>
                 <!-- prettier-ignore -->
                 <!-- <div class="chatBubble" v-if="message.status != 4 && message.status != 5">{{ message.message }}<span class="text-blue-2" style="margin-left:30px;">|</span></div> -->
                 <!-- <div class="chatBubble deleted" v-if="message.status == 4 || message.status == 5">This Message Was Deleted<span class="text-blue-2" style="margin-left:30px;">|</span></div> -->
@@ -212,6 +213,8 @@
                       {{ JSON.parse(message.thumb).name }}
                     </q-btn>
                   </div>
+                  <div class="chatBubble" v-if="message.message">{{ message.message }}</div>
+
                   <div
                     class="row justify-end q-pt-xs"
                     style="font-size: 10px;margin-left: auto"
@@ -399,6 +402,7 @@
     <dialogSelectUser ref="userSelect"/>
     <userDetail ref="userDetail"/>
     <previewImage ref="previewImage"/>
+    <previewFile ref="previewFile"/>
   </q-layout>
 </template>
 
@@ -414,6 +418,7 @@ import statusbox from './statusbox.vue'
 import dialogSelectUser from './dialogSelectUser.vue'
 import userDetail from './userDetail.vue'
 import previewImage from './previewImage.vue'
+import previewFile from './previewFile.vue'
 
 // import { scroll } from 'quasar'
 // const { getScrollHeight } = scroll
@@ -492,7 +497,8 @@ export default {
     statusbox,
     dialogSelectUser,
     userDetail,
-    previewImage
+    previewImage,
+    previewFile
   },
   // name: 'PageName',
   computed: {
@@ -1115,13 +1121,20 @@ export default {
             reject(e)
           })
         })
-        console.log('dir', dir)
+        console.log('dir', file, dir)
         const fileCordova = await new Promise((resolve, reject) => {
           window.resolveLocalFileSystemURL(file.uri, (fileEntry) => {
             console.log('file entry', fileEntry)
             const ext = file.name.split('.').pop()
             fileEntry.copyTo(dir, uid() + '.' + ext, (file) => {
-              resolve(file)
+              file.file((f) => {
+                resolve({
+                  fileEntry: file,
+                  file: f
+                })
+              }, function (e) {
+                reject(e)
+              })
             }, (e) => {
               console.log('fail to copy')
               reject(e)
@@ -1130,16 +1143,23 @@ export default {
             reject(e)
           })
         })
+        console.log('fCordovaCordova', fileCordova)
+
         console.log('fileCordova', fileCordova)
+        const text = await this.$refs.previewFile.open({
+          name: file.name,
+          size: fileCordova.file.size
+        })
+        // console.log('thumb', thumb)
         await this.$store.dispatch('chat/saveChat', {
-          text: this.message,
+          text: text,
           mediaType: 2,
           mediaId: JSON.stringify({
-            file: fileCordova.nativeURL,
+            file: fileCordova.fileEntry.nativeURL,
             type: file.mediaType,
             name: file.name
           }),
-          localFile: fileCordova.nativeURL
+          localFile: fileCordova.fileEntry.nativeURL
         })
 
         this.animateScroll(100)

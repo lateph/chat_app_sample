@@ -4,7 +4,7 @@ export function someAction (context) {
 */
 var _ = require('lodash')
 var db = null
-import { LocalStorage } from 'quasar'
+import { LocalStorage, uid } from 'quasar'
 const bson = require('bson')
 import { jwtDecode } from 'jwt-js-decode'
 var falsy = /^(?:f(?:alse)?|no?|0+)$/i
@@ -152,9 +152,17 @@ export function updateToken ({ state, commit }, userId) {
 export async function sendChat ({ state, dispatch, getters }, { text, localFile, uid, to, mediaType, mediaId, createdAt, updatedAt, groupId, convid, params }) {
   let _mediaId = ''
   let thumb = ''
+  let publicKey = ''
+  console.log(groupId, convid)
+  if (groupId) {
+    publicKey = await dispatch('getGroupPublicKey', convid)
+  } else {
+    publicKey = await dispatch('getPublicKey', convid)
+  }
+  console.log('pubkey', getters.currentUser)
   if (mediaType === 1 || mediaType === '1') {
     const mediaDetail = JSON.parse(mediaId)
-    const ret = await dispatch('uploadFile', { img: mediaDetail.file, type: mediaDetail.type, mediaType })
+    const ret = await dispatch('uploadFile', { img: mediaDetail.file, type: mediaDetail.type, mediaType, publicKey })
     _mediaId = ret.data._id
 
     thumb = await new Promise((resolve, reject) => {
@@ -182,7 +190,7 @@ export async function sendChat ({ state, dispatch, getters }, { text, localFile,
   if (mediaType === 2 || mediaType === '2' || mediaType === 3 || mediaType === '3') {
     console.log('upload file custom')
     const mediaDetail = JSON.parse(mediaId)
-    const ret = await dispatch('uploadFile', { img: mediaDetail.file, type: mediaDetail.type, mediaType })
+    const ret = await dispatch('uploadFile', { img: mediaDetail.file, type: mediaDetail.type, mediaType, publicKey })
     _mediaId = ret.data._id
     thumb = JSON.stringify({
       type: mediaDetail.mediaType,
@@ -190,15 +198,7 @@ export async function sendChat ({ state, dispatch, getters }, { text, localFile,
     })
   }
 
-  console.log('pubkey', getters.currentUser)
   // @todo group need change
-  let publicKey = ''
-  console.log(groupId, convid)
-  if (groupId) {
-    publicKey = await dispatch('getGroupPublicKey', convid)
-  } else {
-    publicKey = await dispatch('getPublicKey', convid)
-  }
 
   const encText = await dispatch('encryptChatMessage', {
     text,
@@ -944,7 +944,7 @@ export async function forwardSelected ({ commit, state, dispatch }, { listTarget
 
 export async function downloadMedia ({ state, commit, dispatch }, uid) {
   const message = await dispatch('getMessageByUID', uid)
-  console.log('download media id : ', message.mediaId)
+  console.log('download media id : ', message)
   const media = await this._vm.$appFeathers.service('media').get(message.mediaId)
   console.log('downlaod file : ', media.filename)
   console.log('downlaod file : ', this._vm.$socket.io.uri)
@@ -954,7 +954,7 @@ export async function downloadMedia ({ state, commit, dispatch }, uid) {
     _id: uid,
     downloading: true
   })
-
+  // download
   if (message.mediaType === '1' || message.mediaType === 1 || message.mediaType === '2' || message.mediaType === 2 || message.mediaType === '3' || message.mediaType === 3) {
     const dir = await new Promise((resolve, reject) => {
       window.resolveLocalFileSystemURL(cordova.file.externalApplicationStorageDirectory, (dirEntry) => {
@@ -972,7 +972,7 @@ export async function downloadMedia ({ state, commit, dispatch }, uid) {
       })
     })
 
-    const filename = await new Promise((resolve, reject) => {
+    let filename = await new Promise((resolve, reject) => {
       var fileTransfer = new window.FileTransfer()
       fileTransfer.onprogress = (event) => {
         console.log('progress', event)
@@ -986,6 +986,7 @@ export async function downloadMedia ({ state, commit, dispatch }, uid) {
       fileTransfer.download(
         baseUrl + '/uploads/' + media.filename,
         dir.nativeURL + media.filename,
+        // dir.nativeURL + media.originalFilename,
         (theFile) => {
           console.log(theFile)
           console.log('download complete: ' + theFile.toURL())
@@ -1001,12 +1002,47 @@ export async function downloadMedia ({ state, commit, dispatch }, uid) {
         }
       )
     })
+    console.log('media laoded', media)
+    // check encrypt
+    if (media.key) {
+      console.log('decryptChatMessage mulai')
+      let pvkey = ''
+      if (message.groupId) {
+        pvkey = await dispatch('getGroupPrivateKey', message.groupId)
+      } else {
+        pvkey = state.privateKey
+      }
+      const dText = await dispatch('decryptChatMessage', {
+        text: media.key,
+        privateKey: pvkey
+      })
+      console.log('key found mulai', dText)
+      filename = await new Promise((resolve, reject) => {
+        window.FileEncryption.decrypt(filename, dText, media._id + media.originalFilename, (e) => {
+          window.resolveLocalFileSystemURL('file://' + filename, (fileEntry) => {
+            console.log('file entry', fileEntry)
+            fileEntry.remove(function (file) {
+              console.log('file removed!')
+            }, function (error) {
+              console.log('error occurred: ' + error.code)
+            }, function () {
+              console.log('file does not exist')
+            })
+          })
+          resolve(e)
+          console.log('success encrypt', e)
+        }, (e) => {
+          reject(e)
+          console.log('error encrypt', e)
+        })
+      })
+    }
     if (filename) {
       console.log('localFIle', filename)
       const appF = this._vm.$appFeathers
       var axios = this._vm.$chatAxios
       const imgCordova = await new Promise((resolve, reject) => {
-        window.resolveLocalFileSystemURL(filename, (fileEntry) => {
+        window.resolveLocalFileSystemURL('file://' + filename, (fileEntry) => {
           console.log('file entry', fileEntry)
           fileEntry.file((file) => {
             appF.service('media').patch(null, { $pull: { to: state.user._id } }, { query: { _id: message.mediaId } }).then((mr) => {
@@ -1165,8 +1201,13 @@ export function setReadCurrentChat ({ state, commit, dispatch }, data) {
   })
 }
 
-export async function uploadFile ({ commit, state, rootState }, { img, type, mediaType }) {
+export async function uploadFile ({ commit, state, rootState, dispatch }, { img, type, mediaType, publicKey }) {
   console.log('start uplaod ', img)
+  const password = uid().replace(/[^\w\s]/gi, '')
+  const encPassword = await dispatch('encryptChatMessage', {
+    text: password,
+    publicKey: publicKey
+  })
   let fileCompress = ''
   if (mediaType === '1' || mediaType === 1) {
     fileCompress = await new Promise((resolve, reject) => {
@@ -1192,59 +1233,104 @@ export async function uploadFile ({ commit, state, rootState }, { img, type, med
   } else {
     fileCompress = img
   }
-  console.log('file comprese upload', img, type)
-  const app = this._vm.$appFeathers
-  return await new Promise((resolve, reject) => {
-    var fd = new FormData()
+  // console.log('create dir for encripsi ok', dir)
+  // encrypt file
+  const cpFile = await new Promise((resolve, reject) => {
     window.resolveLocalFileSystemURL(fileCompress, (fileEntry) => {
       console.log('file entry', fileEntry)
-      fileEntry.file((file) => {
-        console.log(file)
-        var reader = new FileReader()
-        var axios = this._vm.$chatAxios
-        reader.onloadend = function (e) {
-          var imgBlob = new Blob([this.result], { type: type })
-          fd.append('file', imgBlob)
-          console.log(fd, this.result)
-
-          axios.post('https://jpdigi-ppayapi-sit.rintis.co.id/chat/uploads', fd, {
-            headers: {
-              'Content-Type': 'multipart/form-data'
-            }
-          }).then(retAxios => {
-            const dataUpload = retAxios.data
-            console.log('sukses upload', dataUpload)
-            app.service('media').create({
-              multerId: 'asd',
-              filename: dataUpload.filename,
-              externalUrl: null,
-              mimetype: dataUpload.mimetype,
-              filesize: dataUpload.filesize
-            }).then((mediaAxios) => {
-              console.log('sukses create media', mediaAxios)
-              // console.log('sukses create media', mediaAxios.data._id)
-              resolve({
-                data: mediaAxios
-              })
-            }).catch(e => {
-              reject(e)
-            })
-          }).catch(e => {
-            reject(e)
-          })
-          // post form call here
-        }
-        reader.onerror = function (e) {
-          reject(e)
-        }
-        reader.readAsArrayBuffer(file)
-      }, function (e) {
-        reject(e)
-      })
+      resolve(fileEntry)
     }, function (e) {
       reject(e)
     })
   })
+  console.log('cp file for encripsi ok', cpFile, password)
+  const encFile = await new Promise((resolve, reject) => {
+    window.FileEncryption.encrypt(fileCompress, password, (e) => {
+      resolve(e)
+      console.log('success encrypt', e)
+    }, (e) => {
+      reject(e)
+      console.log('error encrypt', e)
+    })
+  })
+  console.log('encripsi ok', encFile)
+  console.log('file comprese upload', encFile, type)
+  try {
+    const app = this._vm.$appFeathers
+    return await new Promise((resolve, reject) => {
+      var fd = new FormData()
+      window.resolveLocalFileSystemURL('file://' + encFile, (fileEntry) => {
+        console.log('file entry', fileEntry)
+        fileEntry.file((file) => {
+          console.log(file)
+          var reader = new FileReader()
+          var axios = this._vm.$chatAxios
+          reader.onloadend = function (e) {
+            var imgBlob = new Blob([this.result], { type: 'application/octet-stream' })
+            fd.append('file', imgBlob)
+            console.log(fd, this.result)
+            axios.post('https://jpdigi-ppayapi-sit.rintis.co.id/chat/uploads', fd, {
+              headers: {
+                'Content-Type': 'multipart/form-data'
+              }
+            }).then(retAxios => {
+              const dataUpload = retAxios.data
+              console.log('sukses upload', dataUpload)
+              fileEntry.remove(function (file) {
+                console.log('file removed!')
+              }, function (error) {
+                console.log('error occurred: ' + error.code)
+              }, function () {
+                console.log('file does not exist')
+              })
+              app.service('media').create({
+                multerId: 'asd',
+                filename: dataUpload.filename,
+                externalUrl: null,
+                mimetype: dataUpload.mimetype,
+                filesize: dataUpload.filesize,
+                originalFilename: cpFile.name,
+                key: encPassword
+              }).then((mediaAxios) => {
+                console.log('sukses create media', mediaAxios)
+                // console.log('sukses create media', mediaAxios.data._id)
+                resolve({
+                  data: mediaAxios
+                })
+              }).catch(e => {
+                reject(e)
+              })
+            }).catch(e => {
+              reject(e)
+            })
+            // post form call here
+          }
+          reader.onerror = function (e) {
+            reject(e)
+          }
+          reader.readAsArrayBuffer(file)
+        }, function (e) {
+          reject(e)
+        })
+      }, function (e) {
+        reject(e)
+      })
+    })
+  } catch (error) {
+    // delete encrypted file
+    window.resolveLocalFileSystemURL('file://' + encFile, (fileEntry) => {
+      console.log('file entry', fileEntry)
+      fileEntry.remove(function (file) {
+        console.log('file removed!')
+      }, function (error) {
+        console.log('error occurred: ' + error.code)
+      }, function () {
+        console.log('file does not exist')
+      })
+    })
+    console.log(error)
+    throw error
+  }
 }
 
 export async function insertMessages ({ state, commit, dispatch }, selects) {

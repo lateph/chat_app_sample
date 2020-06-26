@@ -104,7 +104,7 @@ export async function encryptChatMessage ({ commit, dispatch }, { text, publicKe
 
 export async function decryptChatMessage ({ commit, dispatch }, { text, privateKey }) {
   const encryptedArrayBufferFromHex = hexToArrayBuffer(text)
-
+  console.log('start dec', encryptedArrayBufferFromHex)
   const importedPrivateKey = await crypto.importKey(
     'jwk',
     privateKey,
@@ -115,6 +115,7 @@ export async function decryptChatMessage ({ commit, dispatch }, { text, privateK
     false,
     ['decrypt']
   )
+  console.log('start dec 2')
 
   const decryptedArrayBuffer = await crypto.decrypt(
     {
@@ -123,6 +124,7 @@ export async function decryptChatMessage ({ commit, dispatch }, { text, privateK
     importedPrivateKey,
     encryptedArrayBufferFromHex
   )
+  console.log('start dec 3', decryptedArrayBuffer)
 
   // //   This is what u show in chat
   return dec.decode(decryptedArrayBuffer)

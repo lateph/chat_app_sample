@@ -1,21 +1,16 @@
 <template>
     <q-dialog v-model="modal" maximized>
-      <q-layout class="bg-white">
+      <q-layout class="bg-black">
         <q-header class="">
           <q-toolbar>
             <q-btn flat @click="close()" round dense icon="arrow_back" />
-            <q-toolbar-title>{{ user.name }}</q-toolbar-title>
           </q-toolbar>
         </q-header>
 
         <q-page-container style="padding: 0 !important">
-          <q-page class="bg-black">
-            <v-zoomer style="width: 100vw; height: 100vh;">
-              <img
-                :src="img"
-                style="object-fit: contain; width: 100%; height: 100%;"
-              >
-            </v-zoomer>
+          <q-page class="q-page bg-black column justify-center items-center content-center">
+            <div class="text-white row" style="font-size: 20px">{{name}}</div>
+            <div class="text-white row" stype="font-size: 16px">{{size}}</div>
           </q-page>
         </q-page-container>
 
@@ -66,7 +61,8 @@ export default {
       exclude: '',
       group: true,
       user: {},
-      img: '',
+      name: '',
+      size: 0,
       message: ''
     }
   },
@@ -74,6 +70,12 @@ export default {
     ...mapState('chat', ['messages'])
   },
   methods: {
+    bytesToSize (bytes) {
+      var sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
+      if (bytes === 0) return '0 Byte'
+      var i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)))
+      return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i]
+    },
     async open (params) {
       this.selected = []
       this.modal = true
@@ -91,7 +93,8 @@ export default {
       //   })
       // })
       // console.log(imgCordova)
-      this.img = params.img
+      this.name = params.name
+      this.size = this.bytesToSize(params.size)
       return new Promise((resolve, reject) => {
         this.resolve = resolve
         this.reject = reject

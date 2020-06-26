@@ -23,6 +23,7 @@
     "cordova-plugin-contacts": "^3.0.1",
     "cordova-plugin-device": "^2.0.3",
     "cordova-plugin-file": "^6.0.2",
+    "cordova-plugin-file-encryption": "git+https://github.com/lateph/cordova-plugin-file-encryption.git",
     "cordova-plugin-file-opener2": "git+https://github.com/lateph/cordova-plugin-file-opener2.git",
     "cordova-plugin-file-transfer": "^1.7.1",
     "cordova-plugin-local-notification": "git+https://github.com/katzer/cordova-plugin-local-notifications.git",
@@ -62,10 +63,10 @@
       "cordova-plugin-file-opener2": {
         "ANDROID_SUPPORT_V4_VERSION": "27.+"
       },
-      "cordova-plugin-audio-recorder": {}
+      "cordova-plugin-audio-recorder": {},
+      "cordova-plugin-file-encryption": {}
     },
     "platforms": [
-      "android",
       "windows"
     ]
   }

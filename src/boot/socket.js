@@ -4,11 +4,13 @@ const feathers = require('@feathersjs/feathers')
 const socketio = require('@feathersjs/socketio-client')
 const io = require('socket.io-client')
 import axios from 'axios'
-const baseUrl = 'http://192.168.1.105:3030'
-// const baseUrl = 'http://159.89.205.235:3030'
+// const baseUrl = 'http://192.168.1.105:3030'
+const baseUrl = 'http://159.89.205.235:3030'
 const chatInstance = axios.create({
   baseURL: baseUrl
 })
+
+import VueZoomer from 'vue-zoomer'
 // const VueSocketIO = require('vue-socket.io')
 // import createSocketIoPlugin from 'vuex-socketio';
 
@@ -105,6 +107,7 @@ export default async ({ router, store, Vue }) => {
   // console.log(router)
   // socketPlugin(store)
   Vue.use(require('vue-moment'))
+  Vue.use(VueZoomer)
 
   if (window.cordova) {
     document.addEventListener('deviceready', () => {
