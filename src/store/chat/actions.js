@@ -520,9 +520,8 @@ export async function syncContact ({ state, commit, dispatch }) {
     console.log('%c-contacts', 'color: blue;', JSON.stringify(contacts))
 
     db.transaction((tx) => {
-      tx.executeSql('DELETE FROM contact', [])
       _.forEach(contacts, (row) => {
-        tx.executeSql('INSERT INTO contact VALUES (?,?,?,?,?,?,?)', [row._id, row.email, row.nameId, row.phoneNumber, row.country, row.publicKey, row.imgProfile])
+        tx.executeSql('INSERT OR REPLACE INTO contact VALUES (?,?,?,?,?,?,?)', [row._id, row.email, row.nameId, row.phoneNumber, row.country, row.publicKey, row.imgProfile])
       })
     }, function (error) {
       console.log('Transaction ERROR: ' + error.message)
