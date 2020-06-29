@@ -217,6 +217,18 @@ export function updateConv ({ state, commit, dispatch }, data) {
   })
 }
 
+export function updateConvEmpty ({ state, commit, dispatch }, convid) {
+  this._vm.$db.transaction((tx) => {
+    tx.executeSql('UPDATE conv SET message = ? WHERE convid = ?', ['', convid], (tx, messageResult) => {
+      dispatch('loadConv')
+    })
+  }, (e) => {
+    console.log('update conv gagal', e)
+  }, () => {
+    // console.log('update conv success')
+  })
+}
+
 export function updateConvToZero ({ state, commit, dispatch }, convid) {
   this._vm.$db.transaction((tx) => {
     tx.executeSql('UPDATE conv SET unreadCount = ? WHERE convid = ?', [0, convid], (tx, messageResult) => {
