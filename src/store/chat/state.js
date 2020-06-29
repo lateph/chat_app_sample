@@ -11,6 +11,7 @@ export default function () {
     convs: [],
     appRunning: true,
     selectedCreateGroup: [],
-    privateKey: ''
+    privateKey: '',
+    newMessage: 0
   }
 }

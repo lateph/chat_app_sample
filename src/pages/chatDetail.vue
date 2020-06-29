@@ -561,17 +561,19 @@ export default {
           return _.findIndex(this.$store.getters['chat/currentUser'].members, (x) => x._id === this.$store.state.chat.user._id) === -1
         }
       }
+    },
+    newMessage: {
+      get () {
+        return this.$store.state.chat.newMessage
+      }
     }
   },
   watch: {
-    // messages (newValue, oldValue) {
-    //   console.log(`Updating from ${oldValue.length} to ${newValue.length}`)
-
-    //   // Do whatever makes sense now
-    //   if (oldValue.length !== newValue.length) {
-    //     alert('new')
-    //   }
-    // }
+    newMessage (newValue, oldValue) {
+      if (this.$refs.scrollArea.scrollPercentage === 1) {
+        this.animateScroll(100)
+      }
+    },
     '$route.params.id': function (id) {
       this.$store.dispatch('chat/setCurrent', this.$router.currentRoute.params.id)
       this.firstLoad()

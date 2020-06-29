@@ -791,6 +791,7 @@ export async function addMessage ({ state, commit, dispatch }, data) {
       })
     } else {
       console.log('add message data', data)
+      commit('notifAddMessage')
       dispatch('addMessageToList', {
         message: dText,
         rowid: rowId,

@@ -72,6 +72,10 @@ export function insertMessages (state, data) {
   // }), ...state.dataMessage]
 }
 
+export function notifAddMessage (state, data) {
+  state.newMessage++
+}
+
 // recipientStatus should be not update also
 export function updateMessage (state, data) {
   var index = _.findIndex(state.dataMessage, { _id: data._id })
