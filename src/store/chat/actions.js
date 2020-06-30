@@ -870,14 +870,6 @@ export async function deleteSelected ({ commit, state, dispatch }, deleteMeOnly)
       })
     }
     commit('updateMessage', { ...message, status: status })
-    // check data
-    const iDel = _.findIndex(state.dataMessage, { _id: message._id })
-    console.log('check clear conv', iDel, state.dataMessage.length)
-    if (iDel === state.dataMessage.length - 1) {
-      // delete chat list
-      console.log('seharuse delete chat list', iDel)
-      dispatch('updateConvEmpty', message.convid)
-    }
   }
   dispatch('syncChat')
 }

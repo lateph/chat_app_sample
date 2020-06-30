@@ -96,8 +96,8 @@ export function getUnsentDeleteMessage ({ state, commit, dispatch }) {
   })
 }
 
-export function deleteMessageStatus ({ state }, data) {
-  return new Promise((resolve, reject) => {
+export async function deleteMessageStatus ({ state, dispatch }, data) {
+  await new Promise((resolve, reject) => {
     this._vm.$db.transaction(async (tx) => {
       tx.executeSql('UPDATE message SET status = ?, message = ? WHERE _id = ? and status < ?', [
         data.status,
@@ -114,6 +114,30 @@ export function deleteMessageStatus ({ state }, data) {
       // reject(false)
     })
   })
+  const message = await dispatch('getMessageByUID', data.uid)
+  const max = await new Promise((resolve, reject) => {
+    this._vm.$db.transaction(async (tx) => {
+      tx.executeSql('select _id, max(rowid) from message where convid = ?', [message.convid], (tx, messageResult) => {
+        let selects = messageResult.rows._array
+        if (!selects) {
+          selects = messageResult.rows
+        }
+        if (selects.length > 0) {
+          const message = selects[0]
+          resolve(message)
+        } else {
+          resolve(false)
+        }
+      })
+    }, () => {
+      reject(false)
+    }, () => {
+      // reject(false)
+    })
+  })
+  if (max._id === data.uid) {
+    dispatch('updateConvEmpty', message.convid)
+  }
 }
 
 export function updateMessageLocalFile ({ state }, { localFile, _id }) {
@@ -295,6 +319,8 @@ export async function saveChat2 ({ state, commit, dispatch, getters }, paramsx) 
     _uid = uid()
   }
 
+  const dateNow = new Date().toISOString()
+
   return await new Promise((resolve, reject) => {
     this._vm.$db.transaction(async (tx) => {
       const recipientStatus = _.map(to, (e) => {
@@ -307,8 +333,8 @@ export async function saveChat2 ({ state, commit, dispatch, getters }, paramsx) 
             rowid: result.insertId,
             _id: _uid,
             contact: convid,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+            createdAt: dateNow,
+            updatedAt: dateNow,
             fromid: state.user._id,
             mediaType,
             localFile,
@@ -332,7 +358,7 @@ export async function saveChat2 ({ state, commit, dispatch, getters }, paramsx) 
             name: c.name,
             phoneNumber: c.phoneNumber,
             imgProfile: c.imgProfile,
-            updatedAt: new Date().toISOString()
+            updatedAt: dateNow
           }).then(() => {
             dispatch('updateConvToZero', convid)
             resolve(true)
@@ -352,7 +378,7 @@ export async function saveChat2 ({ state, commit, dispatch, getters }, paramsx) 
           name: c.name,
           phoneNumber: '',
           imgProfile: c.imgProfile,
-          updatedAt: new Date().toISOString()
+          updatedAt: dateNow
         }).then(() => {
           dispatch('updateConvToZero', convid)
           resolve(true)
