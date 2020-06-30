@@ -1149,6 +1149,9 @@ export function readMessage ({ state, commit, dispatch }, data) {
             } else {
               status = 3
             }
+            if (message.status === 4 || message.status === 5) {
+              status = message.status
+            }
             tx.executeSql('UPDATE message SET status = ?, recipientStatus = ? WHERE _id = ?', [status, JSON.stringify(newRecipientStatus), uid], (tx, messageResult) => {
               // if (state.currentUserId === data.from) {
               commit('updateMessage', { _id: uid, recipientStatus: newRecipientStatus, status: status })
