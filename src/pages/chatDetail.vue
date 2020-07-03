@@ -104,7 +104,7 @@
               <div class="bg-blue-4 absolute-full" style="opacity: 0.3" v-if="message.selected" v-on:click="handleHold2(message)"></div>
               <div class="bg-green-4 absolute-full" style="opacity: 0.3" v-if="message.hightlight" v-on:click="handleHold2(message)"></div>
               <!-- text Only -->
-              <div v-if="(!message.mediaType || message.mediaType == '0') && message.status != 4 && message.status != 5" class="bg-green-2 q-pa-xs column q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
+              <div v-if="(!message.mediaType || message.mediaType == '0') && message.status != 4 && message.status != 5" class="bg-green-2 q-pa-xs column q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)"  v-on:click="handleHold2(message)">
                 <div v-if="message.params && message.params.isForward" style="font-style: italic;font-size: 12px" class="text-grey"><q-icon name="reply" color="grey" style="transform: scaleX(-1); margin-bottom: 3px"/>Forwarded</div>
                 <replybox  v-if="message.params && message.params.replyMessage" :message="message.params.replyMessage" class="self-start" @click.native="scrollTo(message)"/>
                 <div class="row">
@@ -273,7 +273,8 @@
         <div class="bg-purple-10 q-mr-xs" style="width:5px; border-radius: 4px 0 0 4px">
         </div>
         <div class="relative-position col-auto" style="flex-grow: 1">
-          <div v-bind:class="['text-purple-10']" class="text-weight-medium">{{replyMessage.fromContact.name}}</div>
+          <div v-bind:class="['text-purple-10']" class="text-weight-medium" v-if="replyMessage.fromContact">{{replyMessage.fromContact.name}}</div>
+          <div v-bind:class="['text-purple-10']" class="text-weight-medium" v-else-if="replyMessage.fromid == $store.state.chat.user._id">You</div>
           <div class="text-black">{{replyMessage.message}}</div>
           <q-icon name="close" color="grey-7" class="absolute-top-right" @click="closeReply()"/>
         </div>
@@ -794,6 +795,12 @@ export default {
     },
     async scrollTo (index) {
       console.log('wayae scroll')
+      const a = _.find(this.$store.getters['chat/messages'], (m) => {
+        return m.selected === true
+      })
+      if (a) {
+        return
+      }
       let stop = false
       let ele = document.getElementById('id-' + index.params.refId)
       let offset = null
@@ -1172,6 +1179,12 @@ export default {
       }
     },
     async openFile (file) {
+      const a = _.find(this.$store.getters['chat/messages'], (m) => {
+        return m.selected === true
+      })
+      if (a) {
+        return
+      }
       try {
         const fileCordova = await new Promise((resolve, reject) => {
           window.resolveLocalFileSystemURL(file, (fileEntry) => {
@@ -1203,6 +1216,12 @@ export default {
       }
     },
     download (uid) {
+      const a = _.find(this.$store.getters['chat/messages'], (m) => {
+        return m.selected === true
+      })
+      if (a) {
+        return
+      }
       this.$store.dispatch('chat/downloadMedia', uid)
     },
     shiftPlusEnter (e) {
@@ -1293,10 +1312,16 @@ export default {
       }
     },
     reply () {
-      this.replyMessage = _.find(this.$store.getters['chat/messages'], (m) => {
+      console.log('reply', this.$store.getters['chat/messages'])
+      const replyMessage = _.find(this.$store.getters['chat/messages'], (m) => {
         return m.selected === true
       })
-      console.log(this.replyMessage)
+      console.log('reply found', replyMessage)
+      if (replyMessage) {
+        this.replyMessage = {
+          ...replyMessage
+        }
+      }
       this.clearSelected()
     },
     closeReply () {
