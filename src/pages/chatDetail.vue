@@ -605,12 +605,11 @@ export default {
   },
   mounted () {
     console.log('mounted')
-    this.$store.dispatch('chat/setCurrent', this.$router.currentRoute.params.id)
-
+    this.$store.dispatch('chat/setCurrent', this.$router.currentRoute.params.id).then(() => {
+      this.firstLoad()
+    })
     this.$store.dispatch('chat/sendPendingChat').then(() => {
     })
-
-    this.firstLoad()
   },
   methods: {
     async removeMember (contact) {
@@ -690,7 +689,7 @@ export default {
 
       for (let index = 0; index < listTarget.length; index++) {
         const element = listTarget[index]
-        this.$store.dispatch('chat/saveChat', {
+        await this.$store.dispatch('chat/saveChat', {
           text: JSON.stringify({
             code: 'add_to_group',
             userId: this.$store.state.chat.user._id,
@@ -780,7 +779,7 @@ export default {
       })
     },
     handleHold (index) {
-      console.log(index)
+      // console.log(index)
       const status = parseInt(index.status)
       const mediaType = parseInt(index.mediaType)
       if (status === 5 || status === 4 || mediaType >= 10) {

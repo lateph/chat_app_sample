@@ -283,7 +283,18 @@ export async function sendReadStatus ({ state }, { uids, to, status }) {
 }
 
 export async function setCurrent ({ state, commit, dispatch }, data) {
+  // check group
+  try {
+    console.log('start check group')
+    const fg = await this._vm.$appFeathers.service('group').get(data)
+    console.log('start check group', fg)
+    await dispatch('newGroup', fg)
+  } catch (error) {
+    console.log('start check group', error)
+  }
+
   commit('setCurrent', data)
+  // console.log('list group', data.data.length)
 
   // subcribe to user online status
   this._vm.$appFeathers.service('onlineuser').patch(null, { $push: { subcriber: state.user._id } }, { query: { userId: state.currentUserId } })
@@ -644,9 +655,11 @@ export async function addAdminGroup ({ state, dispatch, commit }, { _id, member,
 }
 
 export async function newGroup ({ state, dispatch, commit }, group) {
+  console.log('new group called')
   for (let index = 0; index < group.members.length; index++) {
     const element = group.members[index]
     try {
+      console.log('findContactDetail called', element)
       await dispatch('findContactDetail', element)
     } catch (error) {
       console.log('error contact id', element)
@@ -717,6 +730,7 @@ export async function addMessage ({ state, commit, dispatch }, data) {
   if (data.groupId) {
     // id = data.groupId
     contactDetail = await dispatch('getGroupData', id)
+    await dispatch('findContactDetail', data.from)
   } else {
     contactDetail = await dispatch('findContactDetail', id)
   }
@@ -1091,7 +1105,7 @@ export function readMessage ({ state, commit, dispatch }, data) {
   } else {
     db.transaction((tx) => {
       _.forEach(data.uids, (uid) => {
-        tx.executeSql('SELECT * FROM message WHERE _id = ?', [uid], (tx, messageResult) => {
+        tx.executeSql('SELECT rowid, * FROM message WHERE _id = ?', [uid], (tx, messageResult) => {
           let selects = messageResult.rows._array
           if (!selects) {
             selects = messageResult.rows
@@ -1149,6 +1163,19 @@ export function readMessage ({ state, commit, dispatch }, data) {
               commit('updateMessage', { _id: uid, recipientStatus: newRecipientStatus, status: status })
               // }
             })
+            if (status === 3) {
+              console.log('try to update all to', status, message.createdAt)
+              tx.executeSql('UPDATE message SET status = ? WHERE status < ? and convid = ? and rowid < ?', [status, status, message.convid, message.rowid], (tx, messageResult) => {
+                console.log('upddate laine', messageResult.rowsAffected)
+                if (messageResult.rowsAffected > 0) {
+                  console.log('call mutation')
+                  commit('updateMessageToSucces', message)
+                }
+                // if (state.currentUserId === data.from) {
+                // commit('updateMessage', { _id: uid, recipientStatus: newRecipientStatus, status: status })
+                // }
+              })
+            }
           }
         })
       })

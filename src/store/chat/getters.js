@@ -19,7 +19,16 @@ export function currentUser (state) {
             console.log('own user', state.user)
             return state.user
           } else {
-            return _.find(state.contacts, { _id: id })
+            const f = _.find(state.contacts, { _id: id })
+            if (f) {
+              return f
+            } else {
+              return {
+                _id: id,
+                name: 'uknown',
+                email: 'A'
+              }
+            }
           }
         })
         contact.membersName = _.map(contact.members, (c) => {
