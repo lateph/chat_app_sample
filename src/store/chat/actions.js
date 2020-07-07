@@ -555,7 +555,7 @@ export function openDB ({ state }) {
   this._vm.$db = db
   db.transaction((tx) => {
     tx.executeSql('CREATE TABLE IF NOT EXISTS message (_id, message, convid, fromid, toids, createdAt, updatedAt ,status INTEGER, recipientStatus, mediaId, mediaType INTEGER, localFile, thumb, groupId, params, broadcastId)')
-    tx.executeSql('CREATE TABLE IF NOT EXISTS conv (message, convid, name, phoneNumber, unreadCount INTEGER DEFAULT 0, updatedAt, imgProfile, isGroup, isBroadcast, members, admins, publicKey, privateKey)')
+    tx.executeSql('CREATE TABLE IF NOT EXISTS conv (message, convid, name, phoneNumber, unreadCount INTEGER DEFAULT 0, updatedAt, imgProfile, isGroup, isBroadcast, members, admins, publicKey, privateKey, params)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS contact (_id, email, name, phoneNumber, country, publickey, imgProfile)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS setting (key, value)')
     tx.executeSql('CREATE INDEX IF NOT EXISTS convididx ON message (convid)')
@@ -590,6 +590,7 @@ export async function createGroup ({ state, dispatch, commit }, data) {
   return await this._vm.$appFeathers.service('group').create({
     name: data.name,
     image: data.image,
+    createdBy: state.user._id,
     admins: [state.user._id],
     members: [..._.map(state.selectedCreateGroup, (u) => {
       return u._id
@@ -654,16 +655,39 @@ export async function addAdminGroup ({ state, dispatch, commit }, { _id, member,
   dispatch('sendPendingChat')
 }
 
+export async function removeAdminGroup ({ state, dispatch, commit }, { _id, member, contact }) {
+  // add custom message
+  await this._vm.$appFeathers.service('group').patch(null, { $pull: { admins: member } }, { query: { _id: _id } })
+  await dispatch('saveChat', {
+    text: JSON.stringify({
+      code: 'remove_admin_group',
+      userId: state.user._id,
+      userName: state.user.name,
+      targetUserId: contact._id,
+      targetUserName: contact.name
+    }),
+    mediaType: 11,
+    mediaId: '',
+    localFile: ''
+  })
+  dispatch('sendPendingChat')
+}
+
 export async function newGroup ({ state, dispatch, commit }, group) {
-  console.log('new group called')
   for (let index = 0; index < group.members.length; index++) {
     const element = group.members[index]
     try {
-      console.log('findContactDetail called', element)
       await dispatch('findContactDetail', element)
     } catch (error) {
-      console.log('error contact id', element)
       console.log(error)
+    }
+  }
+  let createdByName = ''
+  if (group.createdBy) {
+    try {
+      const _contact = await dispatch('findContactDetail', group.createdBy)
+      createdByName = _contact.name
+    } catch (error) {
     }
   }
   await dispatch('updateConv', {
@@ -678,7 +702,10 @@ export async function newGroup ({ state, dispatch, commit }, group) {
     admins: group.admins,
     publicKey: group.publicKey,
     privateKey: group.privateKey,
-    unreadCount: 0
+    unreadCount: 0,
+    createdAt: group.createdAt,
+    createdBy: group.createdBy,
+    createdByName
   })
   // await dispatch('updateConvToZero', group._id)
 }
@@ -724,22 +751,34 @@ export async function addMessage ({ state, commit, dispatch }, data) {
   }
   console.log('decryptChatMessage done')
 
+  const fromContact = await dispatch('findContactDetail', data.from)
   // update conv
   // this will make list chat have last message inserted
   let contactDetail = {}
   if (data.groupId) {
     // id = data.groupId
     contactDetail = await dispatch('getGroupData', id)
-    await dispatch('findContactDetail', data.from)
   } else {
-    contactDetail = await dispatch('findContactDetail', id)
+    contactDetail = fromContact
   }
   console.log('contactDetail', contactDetail)
 
   const mediaType = String(data.mediaType)
   if (data.from !== state.user._id && mediaType !== '11') {
+    console.log('try update')
+    let cText = dText
+    if (!cText) {
+      if (mediaType === 1) {
+        cText = fromContact.name + ' send a photo'
+      } else if (mediaType === 2) {
+        cText = fromContact.name + ' send a file'
+      } else {
+        cText = fromContact.name + ' send an audio'
+      }
+    }
+    console.log('try update', cText)
     dispatch('updateConv', {
-      message: dText,
+      message: cText,
       convid: id,
       name: contactDetail.name,
       phoneNumber: '',

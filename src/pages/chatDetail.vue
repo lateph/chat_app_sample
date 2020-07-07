@@ -126,7 +126,7 @@
                 <statusbox :message="message" v-if="!message.message" class="row justify-end q-pt-xs absolute text-white" style="font-size: 10px;bottom: 10px;right:10px"/>
               </div>
               <!-- other file type type = 2 -->
-              <div v-if="message.mediaType == 2 && message.status != 4 && message.status != 5" class="column bg-green-2 q-pa-xs flex q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
+              <div v-if="(message.mediaType == 2 || message.mediaType == 3) && message.status != 4 && message.status != 5" class="column bg-green-2 q-pa-xs flex q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
                 <div v-if="message.params && message.params.isForward" style="font-style: italic;font-size: 12px" class="text-grey"><q-icon name="reply" color="grey" style="transform: scaleX(-1); margin-bottom: 3px"/>Forwarded</div>
                 <q-btn unelevated color="green-4" class="q-pa-xs " style="width: 250px;border-radius:6px" v-if="message.mediaType == 2 || message.mediaType == 3" @click="openFile(JSON.parse(message.mediaId).file)">
                   {{ JSON.parse(message.mediaId).name }}
@@ -203,7 +203,7 @@
                   </div>
                 </div>
                 <!-- other = type = 2 -->
-                <div v-if="message.mediaType == 2 && message.status != 4 && message.status != 5" class="column flex justify-between" style="" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
+                <div v-if="(message.mediaType == 2 || message.mediaType == 3) && message.status != 4 && message.status != 5" class="column flex justify-between" style="" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
                   <!-- image me chat -->
                   <div v-if="message.mediaType == 2 || message.mediaType == 3">
                     <q-btn unelevated :loading="message.downloading === true" :percentage="message.percentage" color="grey-7" icon="get_app" class="q-pa-xs " style="width: 250px;border-radius:6px;word-break: break-all;" v-if="!message.localFile" @click="download(message._id)">
@@ -251,6 +251,9 @@
                 </div>
                 <div v-if="message.message.code == 'add_admin_group'">
                   {{message.message.targetUserName}} now an admin
+                </div>
+                <div v-if="message.message.code == 'remove_admin_group'">
+                  {{message.message.userName}} remove {{message.message.targetUserName}} from admin
                 </div>
                 <div v-if="message.message.code == 'date'">
                   {{message.message.date}}
@@ -347,12 +350,12 @@
               </q-img> -->
               <div style="background: url(./statics/group.png);height: 60vw;background-repeat: no-repeat;background-position: center;background-size: contain" class="q-pa-xs">
                 <div class="absolute-bottom text-white" style="font-size: 12px; bottom: 10px; left: 10px">
-                  Created By user-name, 16/09/2019
+                  Created By {{$store.getters['chat/currentUser'].createdByName}}, {{$store.getters['chat/currentUser'].createdAt | moment("DD/MM/YY")}}
                 </div>
               </div>
             </q-card>
             <q-list class="bg-white">
-              <q-item-label header>{{2}} participans</q-item-label>
+              <q-item-label header>{{listMember.length}} participans</q-item-label>
               <q-item v-for="contact in listMember" :key="contact._id" class="q-my-sm" clickable v-ripple @click="removeMember(contact)">
               <q-item-section avatar class="relative-position">
                   <q-avatar color="primary" text-color="white">
@@ -613,28 +616,34 @@ export default {
   },
   methods: {
     async removeMember (contact) {
-      if (contact.isAdmin) {
+      console.log('contact', contact)
+      if (!this.isAdmin || this.$store.getters['chat/currentUser'].createdBy === contact._id) {
         return
       }
-      if (!this.isAdmin) {
-        return
-      }
+      const choose = contact.isAdmin ? [
+        {
+          label: 'Dismiss as Admin',
+          icon: 'delete',
+          color: 'red',
+          id: 'removeadmin'
+        }
+      ] : [
+        {
+          label: 'Make Group Admin',
+          icon: 'person_add',
+          color: 'green',
+          id: 'addadmin'
+        },
+        {
+          label: 'Remove ' + contact.name,
+          icon: 'delete',
+          color: 'red',
+          id: 'delete'
+        }
+      ]
       this.$q.bottomSheet({
         message: 'Bottom Sheet message',
-        actions: [
-          {
-            label: 'Make Group Admin',
-            icon: 'person_add',
-            color: 'green',
-            id: 'addadmin'
-          },
-          {
-            label: 'Remove ' + contact.name,
-            icon: 'delete',
-            color: 'red',
-            id: 'delete'
-          }
-        ]
+        actions: choose
       }).onOk(async action => {
         // console.log('Action chosen:', action.id)
         if (action.id === 'delete') {
@@ -659,6 +668,14 @@ export default {
         }
         if (action.id === 'addadmin') {
           await this.$store.dispatch('chat/addAdminGroup', {
+            _id: this.$store.getters['chat/currentUser'].convid,
+            member: contact._id,
+            contact: contact
+          })
+          this.groupDetail = false
+        }
+        if (action.id === 'removeadmin') {
+          await this.$store.dispatch('chat/removeAdminGroup', {
             _id: this.$store.getters['chat/currentUser'].convid,
             member: contact._id,
             contact: contact

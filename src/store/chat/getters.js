@@ -7,7 +7,9 @@ Boolean.parse = function (val) {
 export function currentUser (state) {
   let contact = _.find(state.contacts, { _id: state.currentUserId })
   if (!contact) {
-    contact = _.find(state.convs, { convid: state.currentUserId })
+    contact = {
+      ..._.find(state.convs, { convid: state.currentUserId })
+    }
     if (contact && contact.members) {
       try {
         contact.members = JSON.parse(contact.members)

@@ -55,7 +55,18 @@ export function messages (state, data) {
 }
 
 export function setConv (state, data) {
-  state.convs = data
+  state.convs = _.map(data, (e) => {
+    let _c = { ...e }
+    try {
+      const params = JSON.parse(_c.params)
+      _c = {
+        ..._c,
+        ...params
+      }
+    } catch (error) {
+    }
+    return _c
+  })
 }
 
 export function insertMessages (state, data) {
