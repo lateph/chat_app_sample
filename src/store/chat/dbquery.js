@@ -381,6 +381,16 @@ export async function saveChat2 ({ state, commit, dispatch, getters }, paramsx) 
         if (String(mediaType) === '11') {
           text = ''
         }
+        const mt = String(mediaType)
+        if (!text) {
+          if (mt === '1') {
+            text = 'You send a photo'
+          } else if (mt === '2') {
+            text = 'You send a file'
+          } else {
+            text = 'You send an audio'
+          }
+        }
         dispatch('updateConv', {
           message: text,
           convid: convid,
