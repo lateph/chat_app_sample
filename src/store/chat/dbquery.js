@@ -43,10 +43,21 @@ export function insertMessage ({ state }, data) {
   })
 }
 
-export function insertContact ({ state }, row) {
-  return new Promise((resolve, reject) => {
+export async function insertContact ({ state, dispatch }, row) {
+  console.log('row.aesKey', row.aesKey)
+  console.log('row.iv', row.iv)
+  console.log('pl', state.privateKey)
+  const aesKey = await dispatch('decryptChatMessage', {
+    text: row.aesKey,
+    privateKey: state.privateKey
+  })
+  const iv = await dispatch('decryptChatMessage', {
+    text: row.iv,
+    privateKey: state.privateKey
+  })
+  return await new Promise((resolve, reject) => {
     this._vm.$db.transaction(async (tx) => {
-      tx.executeSql('INSERT INTO contact VALUES (?,?,?,?,?,?,?)', [row._id, row.email, row.name, row.phoneNumber, row.country, row.publicKey, row.imgProfile], (tx, result) => {
+      tx.executeSql('INSERT OR REPLACE INTO contact VALUES (?,?,?,?,?,?,?,?,?)', [row._id, row.email, row.nameId, row.phoneNumber, row.country, row.publicKey, aesKey, iv, row.imgProfile], (tx, result) => {
         resolve(result)
       })
     }, (e) => {
@@ -485,8 +496,8 @@ export function insertSetting ({ state }, { key, value }) {
   })
 }
 
-export function getPublicKey ({ commit }, _id) {
-  return new Promise((resolve, reject) => {
+export async function getContactKey ({ commit, dispatch }, _id) {
+  const data = await new Promise((resolve, reject) => {
     this._vm.$db.transaction(async (tx) => {
       tx.executeSql('SELECT * FROM contact WHERE _id = ?', [_id], (tx, messageResult) => {
         let selects = messageResult.rows._array
@@ -495,7 +506,7 @@ export function getPublicKey ({ commit }, _id) {
         }
         if (selects.length > 0 && selects[0].publickey) {
           const message = selects[0]
-          resolve(JSON.parse(message.publickey))
+          resolve(message)
         } else {
           reject('user pub key not found')
         }
@@ -506,6 +517,13 @@ export function getPublicKey ({ commit }, _id) {
       // reject(false)
     })
   })
+  const aesKey = await dispatch('importAes', data.aesKey)
+  const iv = await dispatch('hexToArrayBufferData', data.iv)
+  return {
+    publicKey: JSON.parse(data.publickey),
+    aesKey: aesKey,
+    iv: iv
+  }
 }
 
 export function getGroupPublicKey ({ commit }, _id) {

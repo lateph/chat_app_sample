@@ -168,3 +168,11 @@ export function setSelectedForGroup (state, data) {
 export function setPrivatekey (state, data) {
   state.privateKey = data
 }
+
+export function setAesKey (state, data) {
+  state.aesKey = data
+}
+
+export function setIv (state, data) {
+  state.iv = data
+}

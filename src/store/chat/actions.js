@@ -153,13 +153,16 @@ export async function sendChat ({ state, dispatch, getters }, { text, localFile,
   let _mediaId = ''
   let thumb = ''
   let publicKey = ''
+  let aesKey = ''
+  let iv = ''
+
   console.log(groupId, convid)
   if (groupId) {
     publicKey = await dispatch('getGroupPublicKey', convid)
   } else {
-    publicKey = await dispatch('getPublicKey', convid)
+    ({ publicKey, aesKey, iv } = await dispatch('getContactKey', convid))
   }
-  console.log('pubkey', getters.currentUser)
+  console.log('oke oke oke', publicKey, aesKey, iv)
   if (mediaType === 1 || mediaType === '1') {
     const mediaDetail = JSON.parse(mediaId)
     const ret = await dispatch('uploadFile', { img: mediaDetail.file, type: mediaDetail.type, mediaType, publicKey })
@@ -198,11 +201,15 @@ export async function sendChat ({ state, dispatch, getters }, { text, localFile,
     })
   }
 
-  // @todo group need change
+  // const encText = await dispatch('encryptChatMessage', {
+  //   text,
+  //   publicKey: publicKey
+  // })
 
-  const encText = await dispatch('encryptChatMessage', {
+  const encText = await dispatch('encryptAes', {
     text,
-    publicKey: publicKey
+    aesKey,
+    iv
   })
 
   const retMessage = await this._vm.$appFeathers.service('messages').create({
@@ -456,6 +463,7 @@ export async function prosesUpdate ({ state, commit, dispatch }, r) {
   save contact to db
 */
 export async function syncContact ({ state, commit, dispatch }) {
+  console.log('state', state)
   let phoneNumbers = ['+628123466701', '+6597216346', '+628123466702']
   if (navigator.contacts) {
     phoneNumbers = await new Promise((resolve, reject) => {
@@ -514,22 +522,14 @@ export async function syncContact ({ state, commit, dispatch }) {
   }
 
   console.log('hasil contact', contacts)
-
-  return await new Promise((resolve, reject) => {
-    // console.log(phoneNumbers)
-    console.log('%c-contacts', 'color: blue;', JSON.stringify(contacts))
-
-    db.transaction((tx) => {
-      _.forEach(contacts, (row) => {
-        tx.executeSql('INSERT OR REPLACE INTO contact VALUES (?,?,?,?,?,?,?)', [row._id, row.email, row.nameId, row.phoneNumber, row.country, row.publicKey, row.imgProfile])
-      })
-    }, function (error) {
-      console.log('Transaction ERROR: ' + error.message)
-      reject(error)
-    }, function () {
-      resolve(true)
-    })
-  })
+  for (let j = 0; j < contacts.length; j++) {
+    const element = contacts[j]
+    console.log('try insert', element)
+    if (element.publicKey && element.aesKey && element.iv) {
+      console.log('insert contanct', element)
+      await dispatch('insertContact', element)
+    }
+  }
 }
 
 export function openDB ({ state }) {
@@ -545,7 +545,7 @@ export function openDB ({ state }) {
   db.transaction((tx) => {
     tx.executeSql('CREATE TABLE IF NOT EXISTS message (_id, message, convid, fromid, toids, createdAt, updatedAt ,status INTEGER, recipientStatus, mediaId, mediaType INTEGER, localFile, thumb, groupId, params, broadcastId)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS conv (message, convid, name, phoneNumber, unreadCount INTEGER DEFAULT 0, updatedAt, imgProfile, isGroup, isBroadcast, members, admins, publicKey, privateKey)')
-    tx.executeSql('CREATE TABLE IF NOT EXISTS contact (_id, email, name, phoneNumber, country, publickey, imgProfile)')
+    tx.executeSql('CREATE TABLE IF NOT EXISTS contact (_id, email, name, phoneNumber, country, publickey, aesKey, iv, imgProfile)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS setting (key, value)')
     tx.executeSql('CREATE INDEX IF NOT EXISTS convididx ON message (convid)')
     tx.executeSql('CREATE INDEX IF NOT EXISTS broadcastIdx ON message (broadcastId)')
@@ -693,6 +693,8 @@ export async function addMessage ({ state, commit, dispatch }, data) {
     console.log('decryptChatMessage mulai')
     id = data.from
     let pvkey = ''
+    let aesKey = ''
+    let iv = ''
     if (data.groupId) {
       id = data.groupId
       try {
@@ -702,11 +704,15 @@ export async function addMessage ({ state, commit, dispatch }, data) {
         dispatch('syncGroup')
       }
     } else {
-      pvkey = state.privateKey
+      // pvkey = state.privateKey
+      aesKey = state.aesKey
+      iv = state.iv
     }
-    dText = await dispatch('decryptChatMessage', {
+    console.log('pvkey', pvkey)
+    dText = await dispatch('decryptAes', {
       text: data.text,
-      privateKey: pvkey
+      aesKey: aesKey,
+      iv: iv
     })
   }
   console.log('decryptChatMessage done')

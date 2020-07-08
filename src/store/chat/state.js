@@ -12,6 +12,8 @@ export default function () {
     appRunning: true,
     selectedCreateGroup: [],
     privateKey: '',
+    aesKey: '',
+    iv: '',
     newMessage: 0
   }
 }
