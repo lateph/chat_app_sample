@@ -772,7 +772,7 @@ export async function addMessage ({ state, commit, dispatch }, data) {
         cText = fromContact.name + ' send a photo'
       } else if (mediaType === 2) {
         cText = fromContact.name + ' send a file'
-      } else {
+      } else if (mediaType === 3) {
         cText = fromContact.name + ' send an audio'
       }
     }

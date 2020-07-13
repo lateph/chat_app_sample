@@ -387,7 +387,7 @@ export async function saveChat2 ({ state, commit, dispatch, getters }, paramsx) 
             text = 'You send a photo'
           } else if (mt === '2') {
             text = 'You send a file'
-          } else {
+          } else if (mt === '3') {
             text = 'You send an audio'
           }
         }
