@@ -104,7 +104,7 @@
               <div class="bg-blue-4 absolute-full" style="opacity: 0.3" v-if="message.selected" v-on:click="handleHold2(message)"></div>
               <div class="bg-green-4 absolute-full" style="opacity: 0.3" v-if="message.hightlight" v-on:click="handleHold2(message)"></div>
               <!-- text Only -->
-              <div v-if="(!message.mediaType || message.mediaType == '0') && message.status != 4 && message.status != 5" class="bg-green-2 q-pa-xs column q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
+              <div v-if="(!message.mediaType || message.mediaType == '0') && message.status != 4 && message.status != 5" class="bg-green-2 q-pa-xs column q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)"  v-on:click="handleHold2(message)">
                 <div v-if="message.params && message.params.isForward" style="font-style: italic;font-size: 12px" class="text-grey"><q-icon name="reply" color="grey" style="transform: scaleX(-1); margin-bottom: 3px"/>Forwarded</div>
                 <replybox  v-if="message.params && message.params.replyMessage" :message="message.params.replyMessage" class="self-start" @click.native="scrollTo(message)"/>
                 <div class="row">
@@ -126,7 +126,7 @@
                 <statusbox :message="message" v-if="!message.message" class="row justify-end q-pt-xs absolute text-white" style="font-size: 10px;bottom: 10px;right:10px"/>
               </div>
               <!-- other file type type = 2 -->
-              <div v-if="message.mediaType == 2 && message.status != 4 && message.status != 5" class="column bg-green-2 q-pa-xs flex q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
+              <div v-if="(message.mediaType == 2 || message.mediaType == 3) && message.status != 4 && message.status != 5" class="column bg-green-2 q-pa-xs flex q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
                 <div v-if="message.params && message.params.isForward" style="font-style: italic;font-size: 12px" class="text-grey"><q-icon name="reply" color="grey" style="transform: scaleX(-1); margin-bottom: 3px"/>Forwarded</div>
                 <q-btn unelevated color="green-4" class="q-pa-xs " style="width: 250px;border-radius:6px" v-if="message.mediaType == 2 || message.mediaType == 3" @click="openFile(JSON.parse(message.mediaId).file)">
                   {{ JSON.parse(message.mediaId).name }}
@@ -203,7 +203,7 @@
                   </div>
                 </div>
                 <!-- other = type = 2 -->
-                <div v-if="message.mediaType == 2 && message.status != 4 && message.status != 5" class="column flex justify-between" style="" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
+                <div v-if="(message.mediaType == 2 || message.mediaType == 3) && message.status != 4 && message.status != 5" class="column flex justify-between" style="" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
                   <!-- image me chat -->
                   <div v-if="message.mediaType == 2 || message.mediaType == 3">
                     <q-btn unelevated :loading="message.downloading === true" :percentage="message.percentage" color="grey-7" icon="get_app" class="q-pa-xs " style="width: 250px;border-radius:6px;word-break: break-all;" v-if="!message.localFile" @click="download(message._id)">
@@ -252,6 +252,9 @@
                 <div v-if="message.message.code == 'add_admin_group'">
                   {{message.message.targetUserName}} now an admin
                 </div>
+                <div v-if="message.message.code == 'remove_admin_group'">
+                  {{message.message.userName}} remove {{message.message.targetUserName}} from admin
+                </div>
                 <div v-if="message.message.code == 'date'">
                   {{message.message.date}}
                 </div>
@@ -273,7 +276,8 @@
         <div class="bg-purple-10 q-mr-xs" style="width:5px; border-radius: 4px 0 0 4px">
         </div>
         <div class="relative-position col-auto" style="flex-grow: 1">
-          <div v-bind:class="['text-purple-10']" class="text-weight-medium">{{replyMessage.fromContact.name}}</div>
+          <div v-bind:class="['text-purple-10']" class="text-weight-medium" v-if="replyMessage.fromContact">{{replyMessage.fromContact.name}}</div>
+          <div v-bind:class="['text-purple-10']" class="text-weight-medium" v-else-if="replyMessage.fromid == $store.state.chat.user._id">You</div>
           <div class="text-black">{{replyMessage.message}}</div>
           <q-icon name="close" color="grey-7" class="absolute-top-right" @click="closeReply()"/>
         </div>
@@ -346,12 +350,12 @@
               </q-img> -->
               <div style="background: url(./statics/group.png);height: 60vw;background-repeat: no-repeat;background-position: center;background-size: contain" class="q-pa-xs">
                 <div class="absolute-bottom text-white" style="font-size: 12px; bottom: 10px; left: 10px">
-                  Created By user-name, 16/09/2019
+                  Created By {{$store.getters['chat/currentUser'].createdByName}}, {{$store.getters['chat/currentUser'].createdAt | moment("DD/MM/YY")}}
                 </div>
               </div>
             </q-card>
             <q-list class="bg-white">
-              <q-item-label header>{{2}} participans</q-item-label>
+              <q-item-label header>{{listMember.length}} participans</q-item-label>
               <q-item v-for="contact in listMember" :key="contact._id" class="q-my-sm" clickable v-ripple @click="removeMember(contact)">
               <q-item-section avatar class="relative-position">
                   <q-avatar color="primary" text-color="white">
@@ -604,37 +608,42 @@ export default {
   },
   mounted () {
     console.log('mounted')
-    this.$store.dispatch('chat/setCurrent', this.$router.currentRoute.params.id)
-
+    this.$store.dispatch('chat/setCurrent', this.$router.currentRoute.params.id).then(() => {
+      this.firstLoad()
+    })
     this.$store.dispatch('chat/sendPendingChat').then(() => {
     })
-
-    this.firstLoad()
   },
   methods: {
     async removeMember (contact) {
-      if (contact.isAdmin) {
+      console.log('contact', contact)
+      if (!this.isAdmin || this.$store.getters['chat/currentUser'].createdBy === contact._id) {
         return
       }
-      if (!this.isAdmin) {
-        return
-      }
+      const choose = contact.isAdmin ? [
+        {
+          label: 'Dismiss as Admin',
+          icon: 'delete',
+          color: 'red',
+          id: 'removeadmin'
+        }
+      ] : [
+        {
+          label: 'Make Group Admin',
+          icon: 'person_add',
+          color: 'green',
+          id: 'addadmin'
+        },
+        {
+          label: 'Remove ' + contact.name,
+          icon: 'delete',
+          color: 'red',
+          id: 'delete'
+        }
+      ]
       this.$q.bottomSheet({
         message: 'Bottom Sheet message',
-        actions: [
-          {
-            label: 'Make Group Admin',
-            icon: 'person_add',
-            color: 'green',
-            id: 'addadmin'
-          },
-          {
-            label: 'Remove ' + contact.name,
-            icon: 'delete',
-            color: 'red',
-            id: 'delete'
-          }
-        ]
+        actions: choose
       }).onOk(async action => {
         // console.log('Action chosen:', action.id)
         if (action.id === 'delete') {
@@ -665,6 +674,14 @@ export default {
           })
           this.groupDetail = false
         }
+        if (action.id === 'removeadmin') {
+          await this.$store.dispatch('chat/removeAdminGroup', {
+            _id: this.$store.getters['chat/currentUser'].convid,
+            member: contact._id,
+            contact: contact
+          })
+          this.groupDetail = false
+        }
       }).onCancel(() => {
         // console.log('Dismissed')
       }).onDismiss(() => {
@@ -689,7 +706,7 @@ export default {
 
       for (let index = 0; index < listTarget.length; index++) {
         const element = listTarget[index]
-        this.$store.dispatch('chat/saveChat', {
+        await this.$store.dispatch('chat/saveChat', {
           text: JSON.stringify({
             code: 'add_to_group',
             userId: this.$store.state.chat.user._id,
@@ -779,7 +796,7 @@ export default {
       })
     },
     handleHold (index) {
-      console.log(index)
+      // console.log(index)
       const status = parseInt(index.status)
       const mediaType = parseInt(index.mediaType)
       if (status === 5 || status === 4 || mediaType >= 10) {
@@ -794,6 +811,12 @@ export default {
     },
     async scrollTo (index) {
       console.log('wayae scroll')
+      const a = _.find(this.$store.getters['chat/messages'], (m) => {
+        return m.selected === true
+      })
+      if (a) {
+        return
+      }
       let stop = false
       let ele = document.getElementById('id-' + index.params.refId)
       let offset = null
@@ -1172,6 +1195,12 @@ export default {
       }
     },
     async openFile (file) {
+      const a = _.find(this.$store.getters['chat/messages'], (m) => {
+        return m.selected === true
+      })
+      if (a) {
+        return
+      }
       try {
         const fileCordova = await new Promise((resolve, reject) => {
           window.resolveLocalFileSystemURL(file, (fileEntry) => {
@@ -1203,6 +1232,12 @@ export default {
       }
     },
     download (uid) {
+      const a = _.find(this.$store.getters['chat/messages'], (m) => {
+        return m.selected === true
+      })
+      if (a) {
+        return
+      }
       this.$store.dispatch('chat/downloadMedia', uid)
     },
     shiftPlusEnter (e) {
@@ -1293,10 +1328,16 @@ export default {
       }
     },
     reply () {
-      this.replyMessage = _.find(this.$store.getters['chat/messages'], (m) => {
+      console.log('reply', this.$store.getters['chat/messages'])
+      const replyMessage = _.find(this.$store.getters['chat/messages'], (m) => {
         return m.selected === true
       })
-      console.log(this.replyMessage)
+      console.log('reply found', replyMessage)
+      if (replyMessage) {
+        this.replyMessage = {
+          ...replyMessage
+        }
+      }
       this.clearSelected()
     },
     closeReply () {

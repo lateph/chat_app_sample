@@ -4,7 +4,7 @@ export function someAction (context) {
 */
 var _ = require('lodash')
 var db = null
-import { LocalStorage, uid } from 'quasar'
+import { LocalStorage } from 'quasar'
 const bson = require('bson')
 import { jwtDecode } from 'jwt-js-decode'
 var falsy = /^(?:f(?:alse)?|no?|0+)$/i
@@ -152,20 +152,18 @@ export function updateToken ({ state, commit }, userId) {
 export async function sendChat ({ state, dispatch, getters }, { text, localFile, uid, to, mediaType, mediaId, createdAt, updatedAt, groupId, convid, params }) {
   let _mediaId = ''
   let thumb = ''
-  let publicKey = ''
   let aesKey = ''
   let iv = ''
 
   console.log(groupId, convid)
   if (groupId) {
-    publicKey = await dispatch('getGroupPublicKey', convid)
+    ({ aesKey, iv } = await dispatch('getGroupKey', convid))
   } else {
-    ({ publicKey, aesKey, iv } = await dispatch('getContactKey', convid))
+    ({ aesKey, iv } = await dispatch('getContactKey', convid))
   }
-  console.log('oke oke oke', publicKey, aesKey, iv)
   if (mediaType === 1 || mediaType === '1') {
     const mediaDetail = JSON.parse(mediaId)
-    const ret = await dispatch('uploadFile', { img: mediaDetail.file, type: mediaDetail.type, mediaType, publicKey })
+    const ret = await dispatch('uploadFile', { img: mediaDetail.file, type: mediaDetail.type, mediaType, aesKey, iv })
     _mediaId = ret.data._id
 
     thumb = await new Promise((resolve, reject) => {
@@ -193,7 +191,7 @@ export async function sendChat ({ state, dispatch, getters }, { text, localFile,
   if (mediaType === 2 || mediaType === '2' || mediaType === 3 || mediaType === '3') {
     console.log('upload file custom')
     const mediaDetail = JSON.parse(mediaId)
-    const ret = await dispatch('uploadFile', { img: mediaDetail.file, type: mediaDetail.type, mediaType, publicKey })
+    const ret = await dispatch('uploadFile', { img: mediaDetail.file, type: mediaDetail.type, mediaType, aesKey, iv })
     _mediaId = ret.data._id
     thumb = JSON.stringify({
       type: mediaDetail.mediaType,
@@ -290,7 +288,18 @@ export async function sendReadStatus ({ state }, { uids, to, status }) {
 }
 
 export async function setCurrent ({ state, commit, dispatch }, data) {
+  // check group
+  try {
+    console.log('start check group')
+    const fg = await this._vm.$appFeathers.service('group').get(data)
+    console.log('start check group', fg)
+    await dispatch('newGroup', fg)
+  } catch (error) {
+    console.log('start check group', error)
+  }
+
   commit('setCurrent', data)
+  // console.log('list group', data.data.length)
 
   // subcribe to user online status
   this._vm.$appFeathers.service('onlineuser').patch(null, { $push: { subcriber: state.user._id } }, { query: { userId: state.currentUserId } })
@@ -544,7 +553,7 @@ export function openDB ({ state }) {
   this._vm.$db = db
   db.transaction((tx) => {
     tx.executeSql('CREATE TABLE IF NOT EXISTS message (_id, message, convid, fromid, toids, createdAt, updatedAt ,status INTEGER, recipientStatus, mediaId, mediaType INTEGER, localFile, thumb, groupId, params, broadcastId)')
-    tx.executeSql('CREATE TABLE IF NOT EXISTS conv (message, convid, name, phoneNumber, unreadCount INTEGER DEFAULT 0, updatedAt, imgProfile, isGroup, isBroadcast, members, admins, publicKey, privateKey)')
+    tx.executeSql('CREATE TABLE IF NOT EXISTS conv (message, convid, name, phoneNumber, unreadCount INTEGER DEFAULT 0, updatedAt, imgProfile, isGroup, isBroadcast, members, admins, publicKey, privateKey, aesKey, iv, params)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS contact (_id, email, name, phoneNumber, country, publickey, aesKey, iv, imgProfile)')
     tx.executeSql('CREATE TABLE IF NOT EXISTS setting (key, value)')
     tx.executeSql('CREATE INDEX IF NOT EXISTS convididx ON message (convid)')
@@ -579,6 +588,7 @@ export async function createGroup ({ state, dispatch, commit }, data) {
   return await this._vm.$appFeathers.service('group').create({
     name: data.name,
     image: data.image,
+    createdBy: state.user._id,
     admins: [state.user._id],
     members: [..._.map(state.selectedCreateGroup, (u) => {
       return u._id
@@ -643,15 +653,54 @@ export async function addAdminGroup ({ state, dispatch, commit }, { _id, member,
   dispatch('sendPendingChat')
 }
 
+export async function removeAdminGroup ({ state, dispatch, commit }, { _id, member, contact }) {
+  // add custom message
+  await this._vm.$appFeathers.service('group').patch(null, { $pull: { admins: member } }, { query: { _id: _id } })
+  await dispatch('saveChat', {
+    text: JSON.stringify({
+      code: 'remove_admin_group',
+      userId: state.user._id,
+      userName: state.user.name,
+      targetUserId: contact._id,
+      targetUserName: contact.name
+    }),
+    mediaType: 11,
+    mediaId: '',
+    localFile: ''
+  })
+  dispatch('sendPendingChat')
+}
+
 export async function newGroup ({ state, dispatch, commit }, group) {
   for (let index = 0; index < group.members.length; index++) {
     const element = group.members[index]
     try {
       await dispatch('findContactDetail', element)
     } catch (error) {
-      console.log('error contact id', element)
       console.log(error)
     }
+  }
+  let createdByName = ''
+  if (group.createdBy) {
+    try {
+      const _contact = await dispatch('findContactDetail', group.createdBy)
+      createdByName = _contact.name
+    } catch (error) {
+    }
+  }
+  let aesKey = ''
+  let iv = ''
+  if (group.aesKey) {
+    aesKey = await dispatch('decryptChatMessage', {
+      text: group.aesKey,
+      privateKey: state.privateKey
+    })
+  }
+  if (group.iv) {
+    iv = await dispatch('decryptChatMessage', {
+      text: group.iv,
+      privateKey: state.privateKey
+    })
   }
   await dispatch('updateConv', {
     message: '',
@@ -665,7 +714,12 @@ export async function newGroup ({ state, dispatch, commit }, group) {
     admins: group.admins,
     publicKey: group.publicKey,
     privateKey: group.privateKey,
-    unreadCount: 0
+    unreadCount: 0,
+    createdAt: group.createdAt,
+    createdBy: group.createdBy,
+    createdByName,
+    aesKey,
+    iv
   })
   // await dispatch('updateConvToZero', group._id)
 }
@@ -692,13 +746,12 @@ export async function addMessage ({ state, commit, dispatch }, data) {
   } else {
     console.log('decryptChatMessage mulai')
     id = data.from
-    let pvkey = ''
     let aesKey = ''
     let iv = ''
     if (data.groupId) {
       id = data.groupId
       try {
-        pvkey = await dispatch('getGroupPrivateKey', data.groupId)
+        ({ aesKey, iv } = await dispatch('getGroupKey', data.groupId))
       } catch (error) {
         console.log('pvkey is error ', error)
         dispatch('syncGroup')
@@ -708,7 +761,6 @@ export async function addMessage ({ state, commit, dispatch }, data) {
       aesKey = state.aesKey
       iv = state.iv
     }
-    console.log('pvkey', pvkey)
     dText = await dispatch('decryptAes', {
       text: data.text,
       aesKey: aesKey,
@@ -717,6 +769,7 @@ export async function addMessage ({ state, commit, dispatch }, data) {
   }
   console.log('decryptChatMessage done')
 
+  const fromContact = await dispatch('findContactDetail', data.from)
   // update conv
   // this will make list chat have last message inserted
   let contactDetail = {}
@@ -724,14 +777,26 @@ export async function addMessage ({ state, commit, dispatch }, data) {
     // id = data.groupId
     contactDetail = await dispatch('getGroupData', id)
   } else {
-    contactDetail = await dispatch('findContactDetail', id)
+    contactDetail = fromContact
   }
   console.log('contactDetail', contactDetail)
 
   const mediaType = String(data.mediaType)
   if (data.from !== state.user._id && mediaType !== '11') {
+    console.log('try update')
+    let cText = dText
+    if (!cText) {
+      if (mediaType === '1') {
+        cText = fromContact.name + ' send a photo'
+      } else if (mediaType === '2') {
+        cText = fromContact.name + ' send a file'
+      } else if (mediaType === '3') {
+        cText = fromContact.name + ' send an audio'
+      }
+    }
+    console.log('try update', cText)
     dispatch('updateConv', {
-      message: dText,
+      message: cText,
       convid: id,
       name: contactDetail.name,
       phoneNumber: '',
@@ -1009,24 +1074,59 @@ export async function downloadMedia ({ state, commit, dispatch }, uid) {
       )
     })
     console.log('media laoded', media)
+    console.log('media', filename)
+
+    let aesKey = ''
+    let iv = ''
+    if (message.groupId) {
+      ({ aesKey, iv } = await dispatch('getGroupKey', message.groupId))
+    } else {
+      aesKey = state.aesKey
+      iv = state.iv
+    }
     // check encrypt
-    if (media.key) {
-      console.log('decryptChatMessage mulai')
-      let pvkey = ''
-      if (message.groupId) {
-        pvkey = await dispatch('getGroupPrivateKey', message.groupId)
-      } else {
-        pvkey = state.privateKey
-      }
-      const dText = await dispatch('decryptChatMessage', {
-        text: media.key,
-        privateKey: pvkey
-      })
-      console.log('key found mulai', dText)
-      filename = await new Promise((resolve, reject) => {
-        window.FileEncryption.decrypt(filename, dText, media._id + media.originalFilename, (e) => {
-          window.resolveLocalFileSystemURL('file://' + filename, (fileEntry) => {
-            console.log('file entry', fileEntry)
+    // if (media.key) {
+    //   console.log('decryptChatMessage mulai')
+    //   let pvkey = ''
+    //   if (message.groupId) {
+    //     pvkey = await dispatch('getGroupPrivateKey', message.groupId)
+    //   } else {
+    //     pvkey = state.privateKey
+    //   }
+    //   const dText = await dispatch('decryptChatMessage', {
+    //     text: media.key,
+    //     privateKey: pvkey
+    //   })
+    //   console.log('key found mulai', dText)
+    //   filename = await new Promise((resolve, reject) => {
+    //     window.FileEncryption.decrypt(filename, dText, media._id + media.originalFilename, (e) => {
+    //       window.resolveLocalFileSystemURL('file://' + filename, (fileEntry) => {
+    //         console.log('file entry', fileEntry)
+    //         fileEntry.remove(function (file) {
+    //           console.log('file removed!')
+    //         }, function (error) {
+    //           console.log('error occurred: ' + error.code)
+    //         }, function () {
+    //           console.log('file does not exist')
+    //         })
+    //       })
+    //       resolve(e)
+    //       console.log('success encrypt', e)
+    //     }, (e) => {
+    //       reject(e)
+    //       console.log('error encrypt', e)
+    //     })
+    //   })
+    // }
+
+    // read content
+    console.log('key', aesKey, iv)
+    const arrayBufferEnc = await new Promise((resolve, reject) => {
+      window.resolveLocalFileSystemURL(filename, (fileEntry) => {
+        console.log('file entry', fileEntry)
+        fileEntry.file((file) => {
+          var reader = new FileReader()
+          reader.onloadend = function (e) {
             fileEntry.remove(function (file) {
               console.log('file removed!')
             }, function (error) {
@@ -1034,36 +1134,67 @@ export async function downloadMedia ({ state, commit, dispatch }, uid) {
             }, function () {
               console.log('file does not exist')
             })
-          })
-          resolve(e)
-          console.log('success encrypt', e)
-        }, (e) => {
+            resolve(this.result)
+            // post form call here
+          }
+          reader.onerror = function (e) {
+            reject(e)
+          }
+          reader.readAsArrayBuffer(file)
+        }, function (e) {
           reject(e)
-          console.log('error encrypt', e)
         })
+      }, function (e) {
+        reject(e)
       })
-    }
+    })
+    console.log('arrayBufferEnc', arrayBufferEnc)
+
+    const arrayBuffer = await dispatch('decryptAesBuffer', {
+      arrayBuffer: arrayBufferEnc,
+      aesKey: aesKey,
+      iv: iv
+    })
+    console.log('arrayBuffer', arrayBuffer)
+
+    filename = await new Promise((resolve, reject) => {
+      dir.getFile(media._id + media.originalFilename, { create: true, exclusive: false }, function (fileEntry) {
+        console.log('fileEntry is file?' + fileEntry.isFile.toString())
+        // fileEntry.name == 'someFile.txt'
+        // fileEntry.fullPath == '/someFile.txt'
+        fileEntry.createWriter(function (fileWriter) {
+          fileWriter.onwriteend = function () {
+            resolve(fileEntry)
+          }
+          fileWriter.onerror = function (e) {
+            console.log('Failed file write: ' + e.toString())
+            reject(e)
+          }
+          fileWriter.write(new Blob([arrayBuffer]))
+        })
+      }, function (e) {
+        reject(e)
+      })
+    })
+
+    console.log('file write complete')
+
     if (filename) {
       console.log('localFIle', filename)
       const appF = this._vm.$appFeathers
       var axios = this._vm.$chatAxios
       const imgCordova = await new Promise((resolve, reject) => {
-        window.resolveLocalFileSystemURL('file://' + filename, (fileEntry) => {
-          console.log('file entry', fileEntry)
-          fileEntry.file((file) => {
-            appF.service('media').patch(null, { $pull: { to: state.user._id } }, { query: { _id: message.mediaId } }).then((mr) => {
-              console.log('should be check to delete media and file', mr)
-              if (mr.length > 0 && mr[0].to.length === 0) {
-                appF.service('media').remove(message.mediaId)
-                axios.delete('https://jpdigi-ppayapi-sit.rintis.co.id/chat/uploads/' + media.filename).then((file) => {
-                  console.log('file deleted')
-                })
-              }
-            })
-            resolve(file)
-          }, function (e) {
-            reject(e)
+        filename.file((file) => {
+          appF.service('media').patch(null, { $pull: { to: state.user._id } }, { query: { _id: message.mediaId } }).then((mr) => {
+            console.log('should be check to delete media and file', mr)
+            if (mr.length > 0 && mr[0].to.length === 0) {
+              appF.service('media').remove(message.mediaId)
+              axios.delete('https://jpdigi-ppayapi-sit.rintis.co.id/chat/uploads/' + media.filename).then((file) => {
+                console.log('file deleted')
+              })
+            }
           })
+          resolve(file)
         }, function (e) {
           reject(e)
         })
@@ -1097,7 +1228,7 @@ export function readMessage ({ state, commit, dispatch }, data) {
   } else {
     db.transaction((tx) => {
       _.forEach(data.uids, (uid) => {
-        tx.executeSql('SELECT * FROM message WHERE _id = ?', [uid], (tx, messageResult) => {
+        tx.executeSql('SELECT rowid, * FROM message WHERE _id = ?', [uid], (tx, messageResult) => {
           let selects = messageResult.rows._array
           if (!selects) {
             selects = messageResult.rows
@@ -1155,6 +1286,19 @@ export function readMessage ({ state, commit, dispatch }, data) {
               commit('updateMessage', { _id: uid, recipientStatus: newRecipientStatus, status: status })
               // }
             })
+            if (status === 3) {
+              console.log('try to update all to', status, message.createdAt)
+              tx.executeSql('UPDATE message SET status = ? WHERE status < ? and convid = ? and rowid < ?', [status, status, message.convid, message.rowid], (tx, messageResult) => {
+                console.log('upddate laine', messageResult.rowsAffected)
+                if (messageResult.rowsAffected > 0) {
+                  console.log('call mutation')
+                  commit('updateMessageToSucces', message)
+                }
+                // if (state.currentUserId === data.from) {
+                // commit('updateMessage', { _id: uid, recipientStatus: newRecipientStatus, status: status })
+                // }
+              })
+            }
           }
         })
       })
@@ -1210,13 +1354,8 @@ export function setReadCurrentChat ({ state, commit, dispatch }, data) {
   })
 }
 
-export async function uploadFile ({ commit, state, rootState, dispatch }, { img, type, mediaType, publicKey }) {
+export async function uploadFile ({ commit, state, rootState, dispatch }, { img, type, mediaType, aesKey, iv }) {
   console.log('start uplaod ', img)
-  const password = uid().replace(/[^\w\s]/gi, '')
-  const encPassword = await dispatch('encryptChatMessage', {
-    text: password,
-    publicKey: publicKey
-  })
   let fileCompress = ''
   if (mediaType === '1' || mediaType === 1) {
     fileCompress = await new Promise((resolve, reject) => {
@@ -1247,99 +1386,72 @@ export async function uploadFile ({ commit, state, rootState, dispatch }, { img,
   const cpFile = await new Promise((resolve, reject) => {
     window.resolveLocalFileSystemURL(fileCompress, (fileEntry) => {
       console.log('file entry', fileEntry)
-      resolve(fileEntry)
+      fileEntry.file((file) => {
+        var reader = new FileReader()
+        reader.onloadend = function (e) {
+          resolve({
+            fileEntry,
+            arrayBuffer: this.result
+          })
+          // post form call here
+        }
+        reader.onerror = function (e) {
+          reject(e)
+        }
+        reader.readAsArrayBuffer(file)
+      }, function (e) {
+        reject(e)
+      })
     }, function (e) {
       reject(e)
     })
   })
-  console.log('cp file for encripsi ok', cpFile, password)
-  const encFile = await new Promise((resolve, reject) => {
-    window.FileEncryption.encrypt(fileCompress, password, (e) => {
-      resolve(e)
-      console.log('success encrypt', e)
-    }, (e) => {
-      reject(e)
-      console.log('error encrypt', e)
-    })
+
+  console.log('cpFile', cpFile)
+
+  const encArrayBuffer = await dispatch('encryptAesArrayBuffer', {
+    arrayBuffer: cpFile.arrayBuffer,
+    aesKey,
+    iv
   })
-  console.log('encripsi ok', encFile)
-  console.log('file comprese upload', encFile, type)
-  try {
-    const app = this._vm.$appFeathers
-    return await new Promise((resolve, reject) => {
-      var fd = new FormData()
-      window.resolveLocalFileSystemURL('file://' + encFile, (fileEntry) => {
-        console.log('file entry', fileEntry)
-        fileEntry.file((file) => {
-          console.log(file)
-          var reader = new FileReader()
-          var axios = this._vm.$chatAxios
-          reader.onloadend = function (e) {
-            var imgBlob = new Blob([this.result], { type: 'application/octet-stream' })
-            fd.append('file', imgBlob)
-            console.log(fd, this.result)
-            axios.post('https://jpdigi-ppayapi-sit.rintis.co.id/chat/uploads', fd, {
-              headers: {
-                'Content-Type': 'multipart/form-data'
-              }
-            }).then(retAxios => {
-              const dataUpload = retAxios.data
-              console.log('sukses upload', dataUpload)
-              fileEntry.remove(function (file) {
-                console.log('file removed!')
-              }, function (error) {
-                console.log('error occurred: ' + error.code)
-              }, function () {
-                console.log('file does not exist')
-              })
-              app.service('media').create({
-                multerId: 'asd',
-                filename: dataUpload.filename,
-                externalUrl: null,
-                mimetype: dataUpload.mimetype,
-                filesize: dataUpload.filesize,
-                originalFilename: cpFile.name,
-                key: encPassword
-              }).then((mediaAxios) => {
-                console.log('sukses create media', mediaAxios)
-                // console.log('sukses create media', mediaAxios.data._id)
-                resolve({
-                  data: mediaAxios
-                })
-              }).catch(e => {
-                reject(e)
-              })
-            }).catch(e => {
-              reject(e)
-            })
-            // post form call here
-          }
-          reader.onerror = function (e) {
-            reject(e)
-          }
-          reader.readAsArrayBuffer(file)
-        }, function (e) {
-          reject(e)
+
+  console.log('encArrayBuffer', encArrayBuffer)
+
+  const app = this._vm.$appFeathers
+  return await new Promise((resolve, reject) => {
+    var fd = new FormData()
+    var axios = this._vm.$chatAxios
+    var imgBlob = new Blob([encArrayBuffer], { type: 'application/octet-stream' })
+    fd.append('file', imgBlob)
+    console.log(fd, encArrayBuffer)
+    axios.post('https://jpdigi-ppayapi-sit.rintis.co.id/chat/uploads', fd, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    }).then(retAxios => {
+      const dataUpload = retAxios.data
+      console.log('sukses upload', dataUpload)
+      app.service('media').create({
+        multerId: 'asd',
+        filename: dataUpload.filename,
+        externalUrl: null,
+        mimetype: dataUpload.mimetype,
+        filesize: dataUpload.filesize,
+        originalFilename: cpFile.fileEntry.name,
+        key: ''
+      }).then((mediaAxios) => {
+        console.log('sukses create media', mediaAxios)
+        // console.log('sukses create media', mediaAxios.data._id)
+        resolve({
+          data: mediaAxios
         })
-      }, function (e) {
+      }).catch(e => {
         reject(e)
       })
+    }, function (e) {
+      reject(e)
     })
-  } catch (error) {
-    // delete encrypted file
-    window.resolveLocalFileSystemURL('file://' + encFile, (fileEntry) => {
-      console.log('file entry', fileEntry)
-      fileEntry.remove(function (file) {
-        console.log('file removed!')
-      }, function (error) {
-        console.log('error occurred: ' + error.code)
-      }, function () {
-        console.log('file does not exist')
-      })
-    })
-    console.log(error)
-    throw error
-  }
+  })
 }
 
 export async function insertMessages ({ state, commit, dispatch }, selects) {

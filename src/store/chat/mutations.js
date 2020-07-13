@@ -2,7 +2,6 @@ var _ = require('lodash')
 const colors = ['red-10', 'pink-10', 'purple-10', 'deep-purple', 'indigo-10', 'blue-10', 'light-blue-10', 'cyan-10', 'teal-10', 'green-10', 'light-green-10', 'lime-10', 'yellow-10', 'amber-10', 'orange-10', 'deep-orange-10', 'brown-10', 'grey-10', 'blue-grey-10']
 var addedColor = {}
 var moment = require('moment')
-
 function convert (state, data) {
   const contact = _.find(state.contacts, { _id: data.fromid })
   let color = 'green-14'
@@ -14,7 +13,31 @@ function convert (state, data) {
       color = addedColor[data.fromid]
     }
   }
-  return { ...data, fromContact: contact, color: color }
+  if (contact) {
+    return { ...data, fromContact: contact, color: color }
+  } else {
+    const c = {
+      name: 'uknown',
+      _id: data.fromid
+    }
+    return { ...data, fromContact: c, color: color }
+  }
+}
+
+export function updateMessageToSucces (state, data) {
+  state.dataMessage = _.map(state.dataMessage, (e) => {
+    console.log('juancok ilesss', e)
+    if (e.status < 3 && e.createdAt < data.createdAt) {
+      return {
+        ...e,
+        status: 3
+      }
+    } else {
+      return {
+        ...e
+      }
+    }
+  })
 }
 
 export function contacts (state, data) {
@@ -32,7 +55,18 @@ export function messages (state, data) {
 }
 
 export function setConv (state, data) {
-  state.convs = data
+  state.convs = _.map(data, (e) => {
+    let _c = { ...e }
+    try {
+      const params = JSON.parse(_c.params)
+      _c = {
+        ..._c,
+        ...params
+      }
+    } catch (error) {
+    }
+    return _c
+  })
 }
 
 export function insertMessages (state, data) {

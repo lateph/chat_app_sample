@@ -166,11 +166,19 @@ export async function encryptChatMessage ({ commit, dispatch }, { text, publicKe
   return encryptedHexText
 }
 
+// encryip text return text
 export async function encryptAes ({ commit, dispatch }, { text, aesKey, iv }) {
   const encodedChatMessage = enc.encode(text)
   const encryptedArrayBuffer = await crypto.encrypt({ name: 'AES-GCM', iv: iv }, aesKey, encodedChatMessage)
   const encryptedHexText = arrayBufferToHex(encryptedArrayBuffer)
   return encryptedHexText
+}
+
+// encrypt arraybuffer return arraybuffer
+export async function encryptAesArrayBuffer ({ commit, dispatch }, { arrayBuffer, aesKey, iv }) {
+  const encodedChatMessage = arrayBuffer
+  const encryptedArrayBuffer = await crypto.encrypt({ name: 'AES-GCM', iv: iv }, aesKey, encodedChatMessage)
+  return encryptedArrayBuffer
 }
 
 export async function decryptAes ({ commit, dispatch }, { text, aesKey, iv }) {
@@ -180,6 +188,12 @@ export async function decryptAes ({ commit, dispatch }, { text, aesKey, iv }) {
 
   // //   This is what u show in chat
   return decryptedText
+}
+
+export async function decryptAesBuffer ({ commit, dispatch }, { arrayBuffer, aesKey, iv }) {
+  const decryptedArrayBuffer = await crypto.decrypt({ name: 'AES-GCM', iv: iv }, aesKey, arrayBuffer)
+  // //   This is what u show in chat
+  return decryptedArrayBuffer
 }
 
 export async function decryptChatMessage ({ commit, dispatch }, { text, privateKey }) {
