@@ -41,7 +41,7 @@ export function updateMessageToSucces (state, data) {
 }
 
 export function contacts (state, data) {
-  state.contacts = data
+  state.contacts = [...data]
 }
 
 export function insertContact (state, data) {
@@ -121,6 +121,21 @@ export function updateMessage (state, data) {
     }
     state.dataMessage.splice(index, 1, _data)
   }
+}
+
+export function updateProfile (state, data) {
+  var index = _.findIndex(state.contacts, { _id: data._id })
+  if (index > -1) {
+    const _data = {
+      ...state.contacts[index],
+      name: data.nameId,
+      email: data.email,
+      phoneNumber: data.phoneNumber,
+      imgProfile: data.imgProfile
+    }
+    state.contacts.splice(index, 1, _data)
+  }
+  console.log(state)
 }
 
 export function switchSelected (state, data) {

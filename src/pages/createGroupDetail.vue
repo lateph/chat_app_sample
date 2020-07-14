@@ -65,6 +65,7 @@
 </template>
 
 <script>
+import { Notify } from 'quasar'
 export default {
   // name: 'PageName',
   data: function () {
@@ -88,6 +89,10 @@ export default {
   },
   methods: {
     async createGroup () {
+      if (!this.name || this.name.trim() === '') {
+        Notify.create('Please input group name')
+        return
+      }
       const group = await this.$store.dispatch('chat/createGroup', {
         name: this.name,
         image: ''

@@ -20,6 +20,9 @@
                 <q-item clickable v-close-popup @click="syncMain()">
                   <q-item-section>Sync Contact</q-item-section>
                 </q-item>
+                <q-item clickable v-close-popup @click="updateProfile()">
+                  <q-item-section>Test Update profile</q-item-section>
+                </q-item>
               </q-list>
             </q-menu>
           </q-btn>
@@ -172,6 +175,11 @@ export default {
       this.$store.dispatch('chat/doLogout').then(() => {
         this.$router.replace('/')
       })
+    },
+    async updateProfile () {
+      console.log(this.$store.state.chat)
+      await this.$store._vm.$appFeathers.service('users').patch(this.$store.state.chat.user._id, { nameId: Math.random().toString(36).substring(7) })
+      this.$store.dispatch('chat/notifUpdateProfile')
     }
   }
 }

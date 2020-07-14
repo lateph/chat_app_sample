@@ -107,6 +107,22 @@ export function getUnsentDeleteMessage ({ state, commit, dispatch }) {
   })
 }
 
+export function updateProfile ({ state }, d) {
+  return new Promise((resolve, reject) => {
+    this._vm.$db.transaction(async (tx) => {
+      tx.executeSql('UPDATE contact SET email = ?, name = ?, phoneNumber = ?, imgProfile = ? WHERE _id = ?', [d.email, d.nameId, d.phoneNumber, d.imgProfile, d._id], (tx, result) => {
+        console.log('sukses update', result)
+        resolve(result)
+      })
+    }, (e) => {
+      console.log(e)
+      reject(false)
+    }, () => {
+      // reject(false)
+    })
+  })
+}
+
 export async function deleteMessageStatus ({ state, dispatch }, data) {
   await new Promise((resolve, reject) => {
     this._vm.$db.transaction(async (tx) => {
@@ -270,6 +286,68 @@ export function updateConvEmpty ({ state, commit, dispatch }, convid) {
   }, () => {
     // console.log('update conv success')
   })
+}
+
+export async function updateConvProfile ({ state, commit, dispatch }, data) {
+  console.log('update conv to empty')
+  await new Promise((resolve, reject) => {
+    this._vm.$db.transaction((tx) => {
+      tx.executeSql('UPDATE conv SET name = ?, phoneNumber = ?, imgProfile = ? WHERE convid = ?', [data.nameId, data.phoneNumber, data.imgProfile, data._id], (tx, messageResult) => {
+        // dispatch('loadConv')
+        resolve(true)
+        console.log('update conv suces', messageResult)
+      })
+    }, (e) => {
+      resolve(true)
+      console.log('update conv gagal', e)
+    }, () => {
+      // console.log('update conv success')
+    })
+  })
+}
+
+export async function updateConvBroadcast ({ state, commit, dispatch }, data) {
+  const broadcastlist = await new Promise((resolve, reject) => {
+    this._vm.$db.transaction(function (tx) {
+      // tx.executeSql('SELECT * FROM message WHERE rowid in (SELECT MAX(rowid) from message GROUP BY convid)', [], (tx, rs) => {
+      tx.executeSql('SELECT * FROM conv WHERE isBroadcast = ? and members LIKE ?', [true, '%' + data._id + '%'], (tx, rs) => {
+        let selects = rs.rows._array
+        if (!selects) {
+          selects = rs.rows
+        }
+        resolve(selects)
+      }, function (tx, error) {
+        console.log('total user e ', error)
+        resolve([])
+      })
+    })
+  })
+  console.log('braod cast list to update', broadcastlist)
+  for (let i = 0; i < broadcastlist.length; i++) {
+    const broadcast = broadcastlist[i]
+    const members = JSON.parse(broadcast.members)
+    let names = []
+    for (let j = 0; j < members.length; j++) {
+      const m = members[j]
+      const c = await dispatch('findContactDetail', m)
+      names = [...names, c.name]
+    }
+    const newName = _.join(names, ', ')
+    await new Promise((resolve, reject) => {
+      this._vm.$db.transaction((tx) => {
+        tx.executeSql('UPDATE conv SET name = ? WHERE convid = ?', [newName, broadcast.convid], (tx, messageResult) => {
+          // dispatch('loadConv')
+          console.log('update conv suces', messageResult)
+          resolve(true)
+        })
+      }, (e) => {
+        console.log('update conv gagal', e)
+      }, () => {
+        resolve(true)
+        // console.log('update conv success')
+      })
+    })
+  }
 }
 
 export function updateConvToZero ({ state, commit, dispatch }, convid) {

@@ -4,8 +4,8 @@ const feathers = require('@feathersjs/feathers')
 const socketio = require('@feathersjs/socketio-client')
 const io = require('socket.io-client')
 import axios from 'axios'
-// const baseUrl = 'http://192.168.1.105:3030'
-const baseUrl = 'http://159.89.205.235:3030'
+const baseUrl = 'http://192.168.1.105:3030'
+// const baseUrl = 'http://159.89.205.235:3030'
 const chatInstance = axios.create({
   baseURL: baseUrl
 })
@@ -60,9 +60,9 @@ const _deviceready = (Vue, store, router) => {
     })
   app.service('customs')
     .on('created', message => {
-      if (message.text === 'typing' || message.text === 'untyping') {
-        store.commit('chat/setCustoms', message)
-      }
+      // if (message.text === 'typing' || message.text === 'untyping') {
+      store.dispatch('chat/setCustoms', message)
+      // }
     })
   app.service('readevent')
     .on('created', message => {

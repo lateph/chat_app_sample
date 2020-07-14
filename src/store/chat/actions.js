@@ -18,7 +18,8 @@ export async function doSignup ({ state }, { email, password, nameId, country, p
     password,
     nameId,
     phoneNumber,
-    country
+    country,
+    imgProfile: ''
   })
 }
 
@@ -49,6 +50,7 @@ export async function doLogin ({ state, dispatch, commit }, { email, password, s
   } catch (error) {
   }
   await dispatch('loadConv')
+  await dispatch('syncContactDetail')
   dispatch('sendPendingChat')
   await dispatch('syncGroup')
   dispatch('syncChat')
@@ -74,6 +76,7 @@ export async function doLoginJwt ({ state, dispatch, commit }, { jwt }) {
   await dispatch('loadKey')
   await dispatch('loadLocalContact')
   await dispatch('loadConv')
+  await dispatch('syncContactDetail')
   await dispatch('syncGroup')
   dispatch('syncChat')
   dispatch('updateToken', message.user._id)
@@ -302,14 +305,13 @@ export async function setCurrent ({ state, commit, dispatch }, data) {
   // console.log('list group', data.data.length)
 
   // subcribe to user online status
-  this._vm.$appFeathers.service('onlineuser').patch(null, { $push: { subcriber: state.user._id } }, { query: { userId: state.currentUserId } })
   dispatch('setReadCurrentChat')
   dispatch('updateConvToZero', data)
 }
 
 export function removeCurrent ({ state, commit }) {
   console.log('remove current')
-  this._vm.$appFeathers.service('onlineuser').patch(null, { $pull: { subcriber: state.user._id } }, { query: { userId: state.currentUserId } })
+  // this._vm.$appFeathers.service('onlineuser').patch(null, { $pull: { subcriber: state.user._id } }, { query: { userId: state.currentUserId } })
   commit('removeCurrent')
 }
 
@@ -527,10 +529,35 @@ export async function syncContact ({ state, commit, dispatch }) {
     const c = await this._vm.$appFeathers.service('users').find({ query: { $limit: 99999, phoneNumber: chunkphoneNumber } })
     console.log(c)
     const usersFound = c.data
+
+    console.log('mulai cari key')
+    const ids = _.map(c.data, (e) => e._id)
+    const cs = await this._vm.$appFeathers.service('userkey').find({ query: { $limit: 99999, userId: { $in: ids } } })
+    console.log('mulai cari key found', [...cs.data])
+    console.log('mulai join key')
+    for (let i = 0; i < usersFound.length; i++) {
+      const element = usersFound[i]
+      const s = _.remove(cs.data, (o) => o.userId === element._id)
+      console.log('s', s)
+      if (s && s.length > 0) {
+        usersFound[i] = {
+          ...usersFound[i],
+          publicKey: s[0].publicKey,
+          aesKey: s[0].aesKey,
+          iv: s[0].iv
+        }
+      }
+    }
+
     contacts = [...contacts, ...usersFound]
   }
 
   console.log('hasil contact', contacts)
+  const ids = _.map(contacts, (c) => {
+    return c._id
+  })
+  console.log('hashil ids ', ids)
+  this._vm.$appFeathers.service('onlineuser').patch(null, { $addToSet: { subcriber: state.user._id } }, { query: { userId: { $in: ids } } })
   for (let j = 0; j < contacts.length; j++) {
     const element = contacts[j]
     console.log('try insert', element)
@@ -574,14 +601,42 @@ export async function findContactDetail ({ state, dispatch, commit }, id) {
     const data = await this._vm.$appFeathers.service('users').find({ query: { _id: id } })
     console.log('not fond ?', data, id)
     const key = await this._vm.$appFeathers.service('userkey').find({ query: { userId: data.data[0]._id } })
+    console.log('keyfound', key.data[0])
     c = data.data[0]
-    c.publicKey = key.publicKey || key.data[0].publicKey
+    c.publicKey = key.data[0].publicKey
+    c.aesKey = key.data[0].aesKey
+    c.iv = key.data[0].iv
     c.name = c.nameId
     console.log('oke banget ', c, data)
     await dispatch('insertContact', c)
     commit('insertContact', c)
   }
   return c
+}
+
+export async function syncContactDetail ({ state, dispatch, commit }) {
+  const ids = _.map(state.contacts, (e) => e._id)
+  var oldContacs = [...state.contacts]
+  const cs = await this._vm.$appFeathers.service('users').find({ query: { $limit: 99999, _id: { $in: ids } } })
+  for (let i = 0; i < cs.data.length; i++) {
+    const element = cs.data[i]
+    const s = _.remove(oldContacs, (o) => o._id === element._id)
+    if (s && s.length > 0) {
+      if (s[0].name !== element.nameId || s[0].phoneNumber !== element.phoneNumber || s[0].imgProfile !== element.imgProfile) {
+        await dispatch('updateContactDetail', s[0]._id)
+      }
+    }
+  }
+  await dispatch('loadConv')
+}
+
+export async function updateContactDetail ({ state, dispatch, commit }, id) {
+  const data = await this._vm.$appFeathers.service('users').get(id)
+  console.log('oke banget ', data)
+  await dispatch('updateProfile', data)
+  commit('updateProfile', data)
+  await dispatch('updateConvProfile', data)
+  await dispatch('updateConvBroadcast', data)
 }
 
 export async function createGroup ({ state, dispatch, commit }, data) {
@@ -883,7 +938,7 @@ export async function addMessage ({ state, commit, dispatch }, data) {
     if (id === state.currentUserId && data.from !== state.user._id) {
       dispatch('sendReadStatus', { uids: [data.uid], to: data.from, status: 3 })
       if (!state.appRunning && window.cordova && window.cordova.plugins && window.cordova.plugins.notification) {
-        dispatch('findContactDetail', id).then((c) => {
+        dispatch('Detail', id).then((c) => {
           cordova.plugins.notification.local.schedule({
             title: c.name,
             text: dText,
@@ -1570,4 +1625,34 @@ export async function createBroadCast ({ state, dispatch }, members) {
     privateKey: '',
     unreadCount: 0
   })
+}
+
+export async function notifUpdateProfile ({ state, dispatch }) {
+  const data = await this._vm.$appFeathers.service('onlineuser').find({ query: { $limit: 1, userId: state.user._id } })
+  console.log('get subcribers : ', data)
+  if (data.data.length > 0) {
+    const row = data.data[0]
+    const obj = {
+      to: [...row.subcriber],
+      from: {
+        name: state.user.name,
+        _id: state.user._id
+      },
+      group: false,
+      type: 'UPDATE_PROFILE',
+      date: new Date().toISOString()
+    }
+    await this._vm.$appFeathers.service('customs').create(obj)
+    console.log('sent', obj)
+  }
+}
+
+export async function setCustoms ({ state, dispatch }, message) {
+  console.log(message)
+  if (message.text === 'typing' || message.text === 'untyping') {
+    dispatch('setCustoms', message)
+  } else if (message.type === 'UPDATE_PROFILE') {
+    await dispatch('updateContactDetail', message.from._id)
+    await dispatch('loadConv')
+  }
 }

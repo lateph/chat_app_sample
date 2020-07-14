@@ -86,24 +86,37 @@ export async function genKeyPair ({ state, dispatch }) {
     }
   } else {
     const key = data.data[0]
-    console.log(JSON.stringify(data))
+    console.log(data)
     dispatch('setSetting', {
       key: 'privatekey',
       value: key.privateKey
     })
+
+    const pvKey = JSON.parse(key.privateKey)
+
+    const aesKey = await dispatch('decryptChatMessage', {
+      text: key.aesKey,
+      privateKey: pvKey
+    })
+
+    const iv = await dispatch('decryptChatMessage', {
+      text: key.iv,
+      privateKey: pvKey
+    })
+
     dispatch('setSetting', {
       key: 'aesKey',
-      value: key.aesKey
+      value: aesKey
     })
     dispatch('setSetting', {
       key: 'iv',
-      value: key.iv
+      value: iv
     })
-    const importedKey = await crypto.importKey('raw', hexToArrayBuffer(key.aesKey), 'AES-GCM', true, ['encrypt', 'decrypt'])
+    const importedKey = await crypto.importKey('raw', hexToArrayBuffer(aesKey), 'AES-GCM', true, ['encrypt', 'decrypt'])
     return {
-      privateKey: JSON.parse(key.privateKey),
+      privateKey: pvKey,
       aesKey: importedKey,
-      iv: hexToArrayBuffer(key.iv)
+      iv: hexToArrayBuffer(iv)
     }
   }
 }
