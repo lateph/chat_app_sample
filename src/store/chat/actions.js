@@ -232,40 +232,48 @@ export async function sendChat ({ state, dispatch, getters }, { text, localFile,
 }
 
 export async function sendPendingChat ({ dispatch }) {
-  db.transaction((tx) => {
-    tx.executeSql('select message.*, conv.isBroadcast, conv.isGroup from message left join conv on message.convid = conv.convid WHERE message.status = ?', [0], (tx, messageResult) => {
-      let selects = messageResult.rows._array
-      if (!selects) {
-        selects = messageResult.rows
-      }
-      if (selects.length > 0) {
-        _.forEach(selects, (r) => {
-          if (r.isBroadcast) {
-            return
-          }
-          dispatch('sendChat', {
-            text: r.message,
-            convid: r.convid,
-            localFile: r.localFile,
-            mediaType: r.mediaType,
-            mediaId: r.mediaId,
-            createdAt: r.createdAt,
-            updatedAt: r.updatedAt,
-            uid: r._id,
-            groupId: r.groupId,
-            params: r.params,
-            isGroup: Boolean.parse(r.isGroup),
-            isBroadcast: Boolean.parse(r.isBroadcast),
-            to: JSON.parse(r.toids)
-          })
-        })
-      }
+  const selects = await new Promise((resolve, reject) => {
+    db.transaction((tx) => {
+      tx.executeSql('select message.*, conv.isBroadcast, conv.isGroup from message left join conv on message.convid = conv.convid WHERE message.status = ?', [0], (tx, messageResult) => {
+        let selects = messageResult.rows._array
+        if (!selects) {
+          selects = messageResult.rows
+        }
+        if (selects.length > 0) {
+          resolve(selects)
+        }
+      })
+    }, (e) => {
+      resolve([])
+    }, () => {
+      // console.log('update conv success')
     })
-  }, (e) => {
-    console.log('update conv gagal', e)
-  }, () => {
-    // console.log('update conv success')
   })
+  for (let i = 0; i < selects.length; i++) {
+    const r = selects[i]
+    if (r.isBroadcast) {
+      return
+    }
+    try {
+      await dispatch('sendChat', {
+        text: r.message,
+        convid: r.convid,
+        localFile: r.localFile,
+        mediaType: r.mediaType,
+        mediaId: r.mediaId,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        uid: r._id,
+        groupId: r.groupId,
+        params: r.params,
+        isGroup: Boolean.parse(r.isGroup),
+        isBroadcast: Boolean.parse(r.isBroadcast),
+        to: JSON.parse(r.toids)
+      })
+    } catch (error) {
+      console.log(error)
+    }
+  }
 }
 
 export async function setReceive ({ state }, id) {
@@ -301,7 +309,8 @@ export async function setCurrent ({ state, commit, dispatch }, data) {
     console.log('start check group', error)
   }
 
-  commit('setCurrent', data)
+  const a = commit('setCurrent', data)
+  console.log('data commit itu seperti apa se', a)
   // console.log('list group', data.data.length)
 
   // subcribe to user online status
@@ -316,6 +325,7 @@ export function removeCurrent ({ state, commit }) {
 }
 
 export function loadMessage ({ state, commit, dispatch }, limit) {
+  console.log(state.currentUserId)
   return new Promise((resolve, reject) => {
     db.transaction(function (tx) {
       const offset = state.dataMessage.length - _.filter(state.dataMessage, (o) => String(o.mediaType) === '12').length
@@ -666,8 +676,14 @@ export async function leftGroup ({ state, dispatch, commit }, { _id }) {
       groupId: _id
     })
   })
-  if (group.length > 0 && group[0].members.length > 0 && group[0].admins.length === 0) {
+  console.log('xgroup', group)
+  console.log('xgroup', group.length > 0)
+  console.log('xgroup', group[0].members.length > 0)
+  console.log('xgroup', group[0].admins.length)
+  if (group[0].members.length > 0 && group[0].admins.length === 0) {
+    console.log('addd admin')
     const contact = await dispatch('findContactDetail', group[0].members[0])
+    console.log('add to admin', contact)
     dispatch('addAdminGroup', {
       _id: _id,
       member: group[0].members[0],
@@ -792,11 +808,17 @@ export async function addMessage ({ state, commit, dispatch }, data) {
 
   if (data.from === state.user._id) {
     console.log('addMessage sama')
+    console.log('addMessage sama', data)
     if (data.groupId) {
       id = data.groupId
+      // @todo ddont save leave message
+      if (String(data.mediaType) === '11') {
+        return
+      }
     } else {
       id = data.to[0]
     }
+    console.log('kok jek lanjut se jancok ile')
     recipientStatus = JSON.stringify(data.recipientStatus)
   } else {
     console.log('decryptChatMessage mulai')
@@ -1573,6 +1595,7 @@ export async function findConvDetail ({ state }, convid) {
   if (!contact) {
     contact = _.find(state.convs, { convid: convid })
     if (contact && contact.members) {
+      contact = { ...contact }
       try {
         contact.members = JSON.parse(contact.members)
         contact.admins = JSON.parse(contact.admins)
@@ -1655,4 +1678,31 @@ export async function setCustoms ({ state, dispatch }, message) {
     await dispatch('updateContactDetail', message.from._id)
     await dispatch('loadConv')
   }
+}
+
+export async function deleteChat ({ state, dispatch }, conv) {
+  if (Boolean.parse(conv.isGroup)) {
+    await dispatch('saveChat2', {
+      convid: conv.convid,
+      text: JSON.stringify({
+        code: 'left_from_group',
+        userId: state.user._id,
+        userName: state.user.name
+      }),
+      mediaType: 11,
+      mediaId: '',
+      localFile: ''
+    })
+    await dispatch('leftGroup', {
+      _id: conv.convid
+    })
+    await dispatch('sendPendingChat')
+  }
+  await dispatch('deleteMessage', conv.convid)
+  dispatch('deleteConv', conv.convid)
+  dispatch('loadConv')
+}
+
+export async function getGroup ({ state, dispatch }, id) {
+  return await this._vm.$appFeathers.service('group').get(id)
 }

@@ -579,8 +579,10 @@ export default {
       }
     },
     '$route.params.id': function (id) {
-      this.$store.dispatch('chat/setCurrent', this.$router.currentRoute.params.id)
-      this.firstLoad()
+      console.log('new id', id)
+      this.$store.dispatch('chat/setCurrent', id).then(() => {
+        this.firstLoad()
+      })
     }
   },
   data () {
@@ -617,7 +619,10 @@ export default {
   methods: {
     async removeMember (contact) {
       console.log('contact', contact)
-      if (!this.isAdmin || this.$store.getters['chat/currentUser'].createdBy === contact._id) {
+      if (!this.isAdmin) {
+        return
+      }
+      if (contact.isAdmin && this.$store.getters['chat/currentUser'].createdBy === contact._id) {
         return
       }
       const choose = contact.isAdmin ? [
@@ -723,9 +728,6 @@ export default {
       this.groupAdd = false
     },
     async leftGroup () {
-      await this.$store.dispatch('chat/leftGroup', {
-        _id: this.$store.getters['chat/currentUser'].convid
-      })
       await this.$store.dispatch('chat/saveChat', {
         text: JSON.stringify({
           code: 'left_from_group',
@@ -735,6 +737,9 @@ export default {
         mediaType: 11,
         mediaId: '',
         localFile: ''
+      })
+      await this.$store.dispatch('chat/leftGroup', {
+        _id: this.$store.getters['chat/currentUser'].convid
       })
       this.$store.dispatch('chat/sendPendingChat')
       this.groupDetail = false
@@ -900,6 +905,7 @@ export default {
       }
     },
     firstLoad () {
+      console.log('first load oke')
       this.$store.dispatch('chat/loadMessage', 1).then(() => {
         this.$nextTick(() => {
           setTimeout(() => {

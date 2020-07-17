@@ -33,7 +33,7 @@
     <q-page-container>
       <q-page padding v-if="contacts.length > 0 && convs.length > 0">
         <q-list bordered>
-          <q-item v-for="conv in convs" :key="conv.rowid" class="q-my-sm" clickable v-ripple  @click="$router.push('/detail/'+conv.convid)">
+          <q-item v-for="conv in convs" :key="conv.rowid" class="q-my-sm" clickable v-ripple  @click="$router.push('/detail/'+conv.convid)" v-touch-hold="opt => handleHold(opt, conv)">
             <q-item-section avatar>
               <q-avatar color="primary" text-color="white" v-if="!conv.isBroadcast">
                  {{ conv.name.substring(0,1).toUpperCase() }}
@@ -116,7 +116,6 @@
 
 <script>
 import dialogSelectUser from './dialogSelectUser.vue'
-
 export default {
   components: {
     dialogSelectUser
@@ -180,6 +179,36 @@ export default {
       console.log(this.$store.state.chat)
       await this.$store._vm.$appFeathers.service('users').patch(this.$store.state.chat.user._id, { nameId: Math.random().toString(36).substring(7) })
       this.$store.dispatch('chat/notifUpdateProfile')
+    },
+    async handleHold (opt, conv) {
+      this.$q.bottomSheet({
+        message: 'Delete',
+        actions: [
+          {
+            label: 'Delete',
+            icon: 'delete',
+            color: 'red',
+            id: 'drive'
+          }
+        ]
+      }).onOk(action => {
+        // console.log('Action chosen:', action.id)
+        this.$q.dialog({
+          title: 'Confirm',
+          message: 'Are you sure to delete this chat....?',
+          color: 'negative',
+          ok: 'Yes, Im sure',
+          cancel: true,
+          default: 'cancel'
+        }).onOk(() => {
+          console.log('delete')
+          this.$store.dispatch('chat/deleteChat', conv)
+        })
+      }).onCancel(() => {
+        // console.log('Dismissed')
+      }).onDismiss(() => {
+        // console.log('I am triggered on both OK and Cancel')
+      })
     }
   }
 }

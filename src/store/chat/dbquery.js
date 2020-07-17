@@ -256,6 +256,13 @@ export function updateConv ({ state, commit, dispatch }, data) {
           if (!data.isBroadcast) {
             data.isBroadcast = ''
           }
+          console.log('membbers sekarang', members)
+          if (isGroup && _.findIndex(members, (e) => {
+            return e === state.user._id
+          }) === -1) {
+            resolve(true)
+            return
+          }
           tx.executeSql('INSERT INTO conv VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', [data.message, data.convid, data.name, data.phoneNumber, unreadCount, data.updatedAt, data.imgProfile, isGroup, data.isBroadcast, JSON.stringify(members), JSON.stringify(admins), data.publicKey, data.privateKey, data.aesKey, data.iv, JSON.stringify({ createdBy: data.createdBy, createdAt: data.createdAt, createdByName: data.createdByName })], (tx, messageResult) => {
             console.log('loadConv')
             dispatch('loadConv').then(() => {
@@ -734,6 +741,34 @@ export async function removeMemberFromMessage ({ state, commit, dispatch }, { me
       // updatedAt: "2020-06-16T04:55:21.154Z"
     }).catch((e) => {
       console.log('gagal change status', e)
+    })
+  })
+}
+
+export function deleteMessage ({ state, commit, dispatch }, convId) {
+  return new Promise((resolve, reject) => {
+    this._vm.$db.transaction(async (tx) => {
+      tx.executeSql('DELETE FROM message WHERE convid = ?', [convId], (tx, messageResult) => {
+        resolve(true)
+      })
+    }, () => {
+      resolve(true)
+    }, () => {
+      resolve(true)
+    })
+  })
+}
+
+export function deleteConv ({ state, commit, dispatch }, convId) {
+  return new Promise((resolve, reject) => {
+    this._vm.$db.transaction(async (tx) => {
+      tx.executeSql('DELETE FROM conv WHERE convid = ?', [convId], (tx, messageResult) => {
+        resolve(true)
+      })
+    }, () => {
+      resolve(true)
+    }, () => {
+      resolve(true)
     })
   })
 }

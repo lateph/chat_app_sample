@@ -4,7 +4,7 @@ const feathers = require('@feathersjs/feathers')
 const socketio = require('@feathersjs/socketio-client')
 const io = require('socket.io-client')
 import axios from 'axios'
-const baseUrl = 'http://192.168.1.105:3030'
+const baseUrl = 'http://192.168.1.107:3030'
 // const baseUrl = 'http://159.89.205.235:3030'
 const chatInstance = axios.create({
   baseURL: baseUrl
@@ -45,6 +45,7 @@ const _deviceready = (Vue, store, router) => {
   app.service('messages')
     .on('created', message => {
       console.log('%c add message ', 'background: #222; color: #bada55')
+      console.log(message)
       store.dispatch('chat/addMessage', {
         ...message,
         _source: 'socket'
@@ -78,16 +79,24 @@ const _deviceready = (Vue, store, router) => {
       // }
     })
   app.service('group')
-    .on('created', group => {
+    .on('created', async group => {
+      console.log('%c group created', 'background: #222; color: #bada55')
       // if (message.text === 'typing' || message.text === 'untyping') {
-      store.dispatch('chat/newGroup', group)
+
+      // patch fuck feathers
+      const g = await (store.dispatch('chat/getGroup', group._id))
+      console.log('group patched', g)
+      store.dispatch('chat/newGroup', g)
       // }
     })
   app.service('group')
-    .on('patched', group => {
-      console.log('group patched', group)
+    .on('patched', async group => {
+      console.log('%c group patched', 'background: #222; color: #bada55')
       // if (message.text === 'typing' || message.text === 'untyping') {
-      store.dispatch('chat/newGroup', group)
+      const g = await (store.dispatch('chat/getGroup', group._id))
+      console.log('group patched', g)
+
+      store.dispatch('chat/newGroup', g)
       // }
     })
 

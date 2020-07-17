@@ -6,9 +6,10 @@ Boolean.parse = function (val) {
 
 export function currentUser (state) {
   let contact = _.find(state.contacts, { _id: state.currentUserId })
+  const conv = _.find(state.convs, { convid: state.currentUserId })
   if (!contact) {
     contact = {
-      ..._.find(state.convs, { convid: state.currentUserId })
+      ...conv
     }
     if (contact && contact.members) {
       try {
@@ -45,9 +46,17 @@ export function currentUser (state) {
       } catch (error) {
         console.log('cur err', error)
       }
+    } else {
+      contact.members = []
+      contact.admins = []
+      contact.membersName = ''
     }
   }
-  return contact != null ? contact : {}
+  return contact != null ? contact : {
+    members: [],
+    admins: [],
+    membersName: ''
+  }
 }
 
 export function messages (state) {

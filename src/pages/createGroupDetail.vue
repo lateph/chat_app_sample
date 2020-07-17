@@ -90,7 +90,12 @@ export default {
   methods: {
     async createGroup () {
       if (!this.name || this.name.trim() === '') {
-        Notify.create('Please input group name')
+        Notify.create('Please input valid group name')
+        return
+      }
+      const result = /^[a-zA-Z ]+$/.test(this.name)
+      if (!result) {
+        Notify.create('Please input valid group name')
         return
       }
       const group = await this.$store.dispatch('chat/createGroup', {
