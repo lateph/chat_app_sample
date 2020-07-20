@@ -18,7 +18,7 @@
     "axios": "^0.19.2",
     "flag-icon-css": "^3.4.6",
     "jwt-js-decode": "^1.4.1",
-    "lodash": "^4.17.15",
+    "lodash": "^4.17.19",
     "quasar": "^1.0.0",
     "socket.io-client": "^2.3.0",
     "vue-moment": "^4.1.0",
