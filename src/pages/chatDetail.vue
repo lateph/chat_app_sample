@@ -123,7 +123,9 @@
                 <div class="chatBubble deleted" v-if="message.status == 4 || message.status == 5">This Message Was Deleted<span class="text-blue-2" style="margin-left:30px;">|</span></div>
 
                 <statusbox :message="message" v-if="message.message"/>
-                <statusbox :message="message" v-if="!message.message" class="row justify-end q-pt-xs absolute text-white" style="font-size: 10px;bottom: 10px;right:10px"/>
+                <div v-if="!message.message"  class="row justify-end q-pt-xs absolute text-white" style="font-size: 10px;background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.5));font-size: 10px; background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.5));left: 0px; bottom:0px; right:0px">
+                  <statusbox :message="message"  style="margin-bottom: 3px; margin-right: 6px"/>
+                </div>
               </div>
               <!-- other file type type = 2 -->
               <div v-if="(message.mediaType == 2 || message.mediaType == 3) && message.status != 4 && message.status != 5" class="column bg-green-2 q-pa-xs flex q-mr-xs" style="max-width:80%; min-width:150px; border-radius:6px; overflow: hidden;" v-touch-hold="handleHold(message)" v-on:click="handleHold2(message)">
@@ -177,7 +179,8 @@
                         :loading="message.downloading === true"
                         :percentage="message.percentage"
                         @click="download(message._id)"
-                        outline
+                        flat
+                        style="background: #00000066;"
                         class="absolute-center"
                         round
                         color="white"
@@ -190,9 +193,9 @@
 
                   <div
                     v-if="!message.message"
-                    class="row justify-end q-pt-xs absolute" style="font-size: 10px;bottom: 6px;right:6px"
+                    class="row justify-end q-pt-xs absolute" style="font-size: 10px;bottom: 0px;right:0px;left: 0px;background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.5))"
                   >
-                    <dynamic-from-now  class="text-white" :value="message.createdAt"></dynamic-from-now >
+                    <dynamic-from-now  class="text-white" :value="message.createdAt" style="margin-bottom: 3px; margin-right: 6px"></dynamic-from-now >
                   </div>
 
                   <div
@@ -278,8 +281,15 @@
         <div class="relative-position col-auto" style="flex-grow: 1">
           <div v-bind:class="['text-purple-10']" class="text-weight-medium" v-if="replyMessage.fromContact">{{replyMessage.fromContact.name}}</div>
           <div v-bind:class="['text-purple-10']" class="text-weight-medium" v-else-if="replyMessage.fromid == $store.state.chat.user._id">You</div>
-          <div class="text-black">{{replyMessage.message}}</div>
-          <q-icon name="close" color="grey-7" class="absolute-top-right" @click="closeReply()"/>
+          <div class="text-black" v-if="replyMessage.mediaType == 0">{{replyMessage.message}}</div>
+          <div class="text-black" v-if="replyMessage.mediaType == 2 || replyMessage.mediaType == 3">{{ JSON.parse(replyMessage.thumb).name }}</div>
+        </div>
+        <div v-if="replyMessage.mediaType == 1" style="width: 15vw; height: 15wv; background: black" >
+          <q-img :src="replyMessage.thumb" v-if="!replyMessage.localFile" style="height: 100%; width: 100%; object-fit: cover"></q-img>
+          <q-img :src="replyMessage.localFile" v-if="replyMessage.localFile" style="height: 100%; width: 100%; object-fit: cover"></q-img>
+        </div>
+        <div class="relative-position">
+          <q-icon name="close" color="grey-7" @click="closeReply()"/>
         </div>
       </div>
       <div class="row no-wrap q-py-xs justify-space q-px-xs" >
