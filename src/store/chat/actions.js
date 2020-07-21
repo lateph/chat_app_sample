@@ -380,12 +380,17 @@ export async function syncChat ({ state, commit, dispatch }) {
   _.forEach(deleteMessage, async message => {
     const to = JSON.parse(message.toids)
     if (to.length > 0) {
-      await this._vm.$appFeathers.service('readevent').create({
-        uids: [message._id],
-        to: to[0],
-        from: state.user._id,
-        status: 5
-      })
+      for (let i = 0; i < to.length; i++) {
+        if (i !== state.user._id) {
+          const e = to[i]
+          await this._vm.$appFeathers.service('readevent').create({
+            uids: [message._id],
+            to: e,
+            from: state.user._id,
+            status: 5
+          })
+        }
+      }
       await dispatch('deleteMessageStatus', {
         status: 5,
         uid: message._id
@@ -811,10 +816,6 @@ export async function addMessage ({ state, commit, dispatch }, data) {
     console.log('addMessage sama', data)
     if (data.groupId) {
       id = data.groupId
-      // @todo ddont save leave message
-      if (String(data.mediaType) === '11') {
-        return
-      }
     } else {
       id = data.to[0]
     }
@@ -918,8 +919,10 @@ export async function addMessage ({ state, commit, dispatch }, data) {
     console.log('update status by addMessage ' + data.uid, resultUpdate)
   } else {
     console.log('insert message :', data)
-    const resultInsert = await dispatch('insertMessage', [data.uid, dText, id, data.from, to, data.createdAt, data.updatedAt, 2, recipientStatus, data.mediaId, data.mediaType, '', data.thumb, data.groupId, data.params, ''])
-    rowId = resultInsert.insertId
+    if (data.from !== state.user._id) {
+      const resultInsert = await dispatch('insertMessage', [data.uid, dText, id, data.from, to, data.createdAt, data.updatedAt, 2, recipientStatus, data.mediaId, data.mediaType, '', data.thumb, data.groupId, data.params, ''])
+      rowId = resultInsert.insertId
+    }
   }
   // belum selesai untuk group
   // if user already in chat detail add message to list current chat
