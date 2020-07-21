@@ -1012,6 +1012,7 @@ export async function deleteSelected ({ commit, state, dispatch }, deleteMeOnly)
         })
       }
     } else {
+      console.log('delete with else')
       await dispatch('deleteMessageStatus', {
         status: status,
         uid: message._id
@@ -1312,7 +1313,6 @@ export function readMessage ({ state, commit, dispatch }, data) {
           }
           if (selects.length > 0) {
             const message = selects[0]
-            console.log('message to update', message)
             try {
               if (message.broadcastId) {
                 console.log('read message braodcastid', message)
@@ -1539,7 +1539,9 @@ export async function insertMessages ({ state, commit, dispatch }, selects) {
       const params = JSON.parse(element.params)
       element = { ...element, params }
       if (params.refId) {
+        console.log('params found', params.refId)
         const message = await dispatch('getMessageByUID', params.refId)
+        console.log('params found', { ...message })
         let name = ''
         if (message.fromid === state.user._id) {
           name = 'You'
@@ -1670,10 +1672,10 @@ export async function notifUpdateProfile ({ state, dispatch }) {
   }
 }
 
-export async function setCustoms ({ state, dispatch }, message) {
+export async function setCustoms ({ state, dispatch, commit }, message) {
   console.log(message)
   if (message.text === 'typing' || message.text === 'untyping') {
-    dispatch('setCustoms', message)
+    commit('setCustoms', message)
   } else if (message.type === 'UPDATE_PROFILE') {
     await dispatch('updateContactDetail', message.from._id)
     await dispatch('loadConv')
